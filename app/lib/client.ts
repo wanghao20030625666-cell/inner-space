@@ -7,6 +7,7 @@ import {
   type Collection,
   type View,
 } from "./model";
+import type { Reminder } from "./reminders";
 export type Count = {
   kind: Kind;
   status: string;
@@ -50,6 +51,7 @@ export type Data = {
   items: SpaceRecord[];
   recent: SpaceRecord[];
   onThisDay: SpaceRecord[];
+  reminders: Reminder[];
   activity: Activity[];
   preferences: Preferences;
   counts: Count[];
@@ -68,6 +70,7 @@ export const initialData: Data = {
   items: [],
   recent: [],
   onThisDay: [],
+  reminders: [],
   activity: [],
   preferences: defaultPreferences,
   counts: [],

@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { Download } from "lucide-react";
 import type { Collection } from "../lib/model";
-import { exportBackup } from "../lib/backup";
 /** Explicit format selection keeps record-only and attachment-backed exports distinguishable. */
 export default function CollectionExport({
   collection,
@@ -17,6 +16,7 @@ export default function CollectionExport({
   async function run(files: boolean) {
     setBusy(true);
     try {
+      const { exportBackup } = await import("../lib/backup");
       await exportBackup(files, setProgress, collection);
       notify("专题备份已生成，请保管好下载文件");
       setOpen(false);

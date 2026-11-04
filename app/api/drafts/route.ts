@@ -5,7 +5,7 @@ const input = z.object({
   key: z
     .string()
     .regex(
-      /^(new-(inbox|note|journal|task|project|event|bookmark|expense|contact)|[0-9a-f-]{36})$/,
+      /^(new-(inbox|note|journal|task|project|event|bookmark|expense|contact)(-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})?|[0-9a-f-]{36})$/,
     ),
   version: z.number().int().min(0),
   data: z.object({

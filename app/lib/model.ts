@@ -82,6 +82,22 @@ export const recordInput = z
       .default(null),
   })
   .superRefine((v, ctx) => {
+    if (
+      v.kind === "contact" &&
+      v.meta.birthday &&
+      (!/^\d{2}-\d{2}$/.test(String(v.meta.birthday)) || !isCalendarDate(`2000-${v.meta.birthday}`))
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "生日请使用有效月日，如 05-18",
+        path: ["meta", "birthday"],
+      });
+    if (
+      v.kind === "event" &&
+      v.meta.reminderType &&
+      !["none", "countdown", "subscription"].includes(String(v.meta.reminderType))
+    )
+      ctx.addIssue({ code: "custom", message: "提醒类型无效", path: ["meta", "reminderType"] });
     if (v.kind === "bookmark") {
       try {
         const u = new URL(String(v.meta.url || ""));

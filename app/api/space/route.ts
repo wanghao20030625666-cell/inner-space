@@ -16,6 +16,7 @@ import {
 } from "../../lib/server";
 import { recordQuery } from "../../lib/query";
 import { defaultPreferences, fromRow, isCalendarDate } from "../../lib/model";
+import { buildReminders, type ReminderSource } from "../../lib/reminders";
 
 export async function GET(request: Request) {
   try {
@@ -79,6 +80,7 @@ export async function GET(request: Request) {
       ledgerCategories,
       ledgerMonths,
       onThisDay,
+      reminderRows,
     ] = await Promise.all([
       db
         .prepare(
@@ -179,6 +181,18 @@ export async function GET(request: Request) {
         )
         .bind(owner, today.slice(5), today.slice(0, 4))
         .all<Record<string, unknown>>(),
+      db
+        .prepare(
+          "SELECT id,kind,title,due_at AS dueAt,json_object('birthday',COALESCE(json_extract(meta,'$.birthday'),''),'reminderType',COALESCE(json_extract(meta,'$.reminderType'),'')) AS meta FROM records WHERE owner = ? AND deleted_at IS NULL AND status = 'active' AND ((kind = 'contact' AND COALESCE(json_extract(meta,'$.birthday'),'') != '') OR (kind = 'event' AND json_extract(meta,'$.reminderType') IN ('countdown','subscription')))",
+        )
+        .bind(owner)
+        .all<{
+          id: string;
+          kind: ReminderSource["kind"];
+          title: string;
+          dueAt: string | null;
+          meta: string;
+        }>(),
     ]);
     const items = rows.results.slice(0, 200).map(fromRow),
       last = items.at(-1);
@@ -190,6 +204,10 @@ export async function GET(request: Request) {
       },
       items,
       onThisDay: onThisDay.results.map(fromRow),
+      reminders: buildReminders(
+        reminderRows.results.map((r) => ({ ...r, meta: JSON.parse(r.meta) })),
+        today,
+      ),
       recent: recent.results.map(fromRow),
       dueTasks: dueTasks.results.map(fromRow),
       upcoming: upcoming.results.map(fromRow),

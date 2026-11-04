@@ -1,4 +1,142 @@
 /* Functional surfaces share the existing palette and keep narrow screens usable. */
+.reminders-panel {
+  margin: 22px 0;
+}
+.reminders-panel .panel-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.reminder-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 15px 24px;
+  border-top: 1px solid var(--line);
+}
+.reminder-row > span {
+  flex: 1;
+  min-width: 0;
+}
+.reminder-row small {
+  font-size: 10px;
+  color: var(--muted);
+  display: block;
+  margin-bottom: 5px;
+}
+.reminder-row strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.reminder-row b {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+  white-space: nowrap;
+}
+.reminder-row.overdue b {
+  color: #a55b45;
+}
+.reminder-row:hover {
+  background: var(--surface2);
+}
+.reminder-note,
+.reminder-empty {
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--muted);
+  padding: 10px 24px 15px;
+}
+.reminder-empty {
+  font-size: 12px;
+  padding-top: 16px;
+}
+.trash-expiry {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.7;
+  padding-top: 10px;
+  grid-column: 1 / -1;
+}
+.capture-prompt {
+  padding: 5px 27px 0;
+}
+.capture-prompt h3 {
+  font-size: 16px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.capture-url {
+  color: var(--primary);
+  font-size: 12px;
+  line-height: 1.8;
+  word-break: break-all;
+  margin-top: 12px;
+}
+.capture-prompt pre {
+  white-space: pre-wrap;
+  max-height: 30vh;
+  overflow: auto;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.8;
+  margin-top: 14px;
+}
+.capture-prompt .confirm-actions {
+  padding: 22px 0;
+}
+.bookmarklet-code {
+  width: 100%;
+  resize: vertical;
+  margin: 15px 0 10px;
+  padding: 10px;
+  font:
+    10px/1.6 Consolas,
+    monospace;
+  background: var(--surface2);
+  color: var(--sub);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.markdown-image {
+  margin: 18px 0;
+}
+.markdown-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 560px;
+  object-fit: contain;
+  border-radius: 5px;
+}
+.markdown-image figcaption {
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 7px;
+}
+.lazy-loading {
+  padding: 28px;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 620px) {
+  .reminder-row {
+    padding: 14px 17px;
+    gap: 8px;
+  }
+  .reminder-row strong {
+    font-size: 12px;
+  }
+  .reminder-row b {
+    font-size: 11px;
+  }
+  .capture-prompt {
+    padding: 5px 20px 0;
+  }
+}
 .recovery-page {
   display: grid;
   min-height: 100dvh;

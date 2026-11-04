@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { zipSync, strToU8 } from "fflate";
 import { createHash } from "node:crypto";
-import { buildBackup, readBackup } from "../app/lib/backup";
+import { buildBackup, readBackup, restoreBackup, type PreparedBackup } from "../app/lib/backup";
+import type { SpaceRecord } from "../app/lib/model";
 const record = {
   id: "00000000-0000-4000-8000-000000000001",
   kind: "file",
@@ -21,6 +22,102 @@ const record = {
 };
 const bytes = strToU8("hello"),
   sha256 = createHash("sha256").update(bytes).digest("hex");
+describe("inline-image backup lifecycle", () => {
+  const noteId = "00000000-0000-4000-8000-000000000003";
+  it("includes a referenced album image even when it is outside the collection", async () => {
+    const collection = {
+      id: "00000000-0000-4000-8000-000000000010",
+      name: "含图笔记",
+      color: "green",
+      createdAt: "2026-01-01",
+      count: 1,
+    };
+    const note = {
+      ...record,
+      id: noteId,
+      kind: "note",
+      collectionId: collection.id,
+      content: `![截图](/api/files/${record.id})`,
+    };
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input), "https://test.invalid");
+      if (url.pathname.startsWith("/api/files/")) return new Response(new Uint8Array(bytes).buffer);
+      if (url.pathname === "/api/activity") return Response.json({ rows: [], nextCursor: null });
+      return Response.json({
+        items: url.searchParams.has("id")
+          ? [record]
+          : url.searchParams.get("scope") === "trash"
+            ? []
+            : [note],
+        nextCursor: null,
+      });
+    });
+    try {
+      const result = await buildBackup(true, () => {}, collection),
+        prepared = await readBackup(new File([result.value], result.filename));
+      expect(prepared.backup.records.map((r) => r.id).sort()).toEqual([record.id, noteId].sort());
+      expect(prepared.entries[`files/${record.id}`]).toEqual(bytes);
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+  it("restores new image IDs before returning a containing note to trash", async () => {
+    const nextNote = "00000000-0000-4000-8000-000000000004",
+      nextFile = "00000000-0000-4000-8000-000000000005";
+    const note = {
+      ...record,
+      id: noteId,
+      kind: "note",
+      content: `![截图](/api/files/${record.id})`,
+      deletedAt: "2026-01-01T00:00:00Z",
+    };
+    const prepared = {
+      backup: {
+        format: "inner-space-v3",
+        records: [note, record],
+        collections: [],
+        files: { [record.id]: { path: "files/sample", sha256 } },
+      },
+      entries: { "files/sample": bytes },
+    } as PreparedBackup;
+    const saved = new Map<string, SpaceRecord>();
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, options) => {
+      const path = String(input);
+      if (path === "/api/space" && !options?.method) return Response.json({ collections: [] });
+      if (path === "/api/upload") {
+        const value = { ...record, id: nextFile, version: 1, deletedAt: null } as SpaceRecord;
+        saved.set(nextFile, value);
+        return Response.json({ item: value });
+      }
+      const body = JSON.parse(String(options?.body));
+      if (options?.method === "POST") {
+        const value = { ...body, id: nextNote, version: 1, deletedAt: null } as SpaceRecord;
+        saved.set(nextNote, value);
+        return Response.json({ item: value });
+      }
+      const current = saved.get(body.id)!;
+      expect(body.version).toBe(current.version);
+      const value = {
+        ...current,
+        ...body,
+        version: current.version + 1,
+        ...(body.action === "trash" ? { deletedAt: "2026-11-04T00:00:00Z" } : {}),
+      };
+      saved.set(body.id, value);
+      return Response.json({ item: value });
+    });
+    try {
+      const result = await restoreBackup(prepared, () => {});
+      expect(result.files).toBe(1);
+      expect(saved.get(nextNote)?.content).toContain(nextFile);
+      expect(saved.get(nextNote)?.content).not.toContain(record.id);
+      expect(saved.get(nextNote)?.deletedAt).not.toBeNull();
+      expect(saved.get(nextNote)?.version).toBe(3);
+    } finally {
+      fetch.mockRestore();
+    }
+  });
+});
 const backup = (hash = sha256) => ({
   format: "inner-space-v3",
   records: [record],

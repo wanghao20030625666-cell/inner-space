@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ClipboardEvent } from "react";
 import {
   Star,
   Trash2,
@@ -24,6 +24,9 @@ import FilePreview from "./file-preview";
 import { useDraft, type DraftData } from "./draft-state";
 import { exportRecord } from "../lib/exports";
 import { completeEditorClose, type CloseChoice } from "../lib/editor-close";
+import UploadQueue, { type UploadBatch } from "./upload-queue";
+import { imageMarkdown } from "../lib/inline-images";
+import type { EditorSeed } from "../lib/capture";
 type Draft = DraftData;
 const newDraft = (kind: Kind): Draft => ({
   kind,
@@ -47,6 +50,8 @@ export default function Editor({
   kind: initialKind,
   item,
   date,
+  seed,
+  draftKey,
   collections,
   collectionId,
   onClose,
@@ -56,12 +61,20 @@ export default function Editor({
   kind: Kind;
   item?: SpaceRecord;
   date?: string;
+  seed?: EditorSeed;
+  draftKey?: string;
   collections: Collection[];
   collectionId: string | null;
   onClose: () => void;
   onSaved: (item: SpaceRecord, notice?: string | null) => Promise<void>;
   onTrash: (r: SpaceRecord) => Promise<void>;
 }) {
+  const [empty] = useState<Draft>(() => ({
+    baseVersion: 0,
+    ...newDraft(initialKind),
+    collectionId,
+    ...(date ? { dueAt: date } : {}),
+  }));
   const [draft, setDraft] = useState<Draft>(() =>
     item
       ? {
@@ -78,14 +91,17 @@ export default function Editor({
           collectionId: item.collectionId || null,
         }
       : {
-          baseVersion: 0,
-          ...newDraft(initialKind),
-          collectionId,
-          ...(date ? { dueAt: date } : {}),
+          ...empty,
+          ...seed,
+          meta: { ...empty.meta, ...seed?.meta },
         },
   );
   const kind = draft.kind;
-  const initial = useRef(JSON.stringify(draft)),
+  const contentRef = useRef(draft.content);
+  useEffect(() => {
+    contentRef.current = draft.content;
+  }, [draft.content]);
+  const initial = useRef(JSON.stringify(seed && !item ? empty : draft)),
     [saving, setSaving] = useState(false),
     [error, setError] = useState(""),
     [preview, setPreview] = useState(false),
@@ -96,15 +112,52 @@ export default function Editor({
     [projects, setProjects] = useState<SpaceRecord[]>([]),
     [wantTrash, setWantTrash] = useState(false),
     [discard, setDiscard] = useState(false),
-    [uploadsRunning, setUploadsRunning] = useState(false);
+    [attachmentRunning, setAttachmentRunning] = useState(false),
+    [pasteRunning, setPasteRunning] = useState(false),
+    [pasteBatch, setPasteBatch] = useState<UploadBatch | null>(null);
+  const uploadsRunning = attachmentRunning || pasteRunning;
   const m = moduleFor(kind),
     readOnly = !!item?.deletedAt;
   const draftState = useDraft(
-    item?.id || `new-${initialKind}`,
+    item?.id || draftKey || `new-${initialKind}`,
     draft,
     readOnly || ["file", "photo"].includes(initialKind),
     setDraft,
+    seed && !item ? empty : undefined,
   );
+  function pasteImages(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const images = Array.from(e.clipboardData.items)
+      .filter((x) => x.kind === "file" && x.type.startsWith("image/"))
+      .map((x) => x.getAsFile())
+      .filter((x): x is File => !!x);
+    if (!images.length) return;
+    e.preventDefault();
+    if (
+      images.some((f) => !["image/png", "image/jpeg", "image/gif", "image/webp"].includes(f.type))
+    ) {
+      setError("粘贴图片支持 PNG、JPG、GIF 和 WebP；其他格式请作为附件上传。");
+      return;
+    }
+    setError("");
+    setPasteBatch({
+      id: crypto.randomUUID(),
+      files: images,
+      kind: "photo",
+      collectionId: draft.collectionId,
+      ...(item ? { parentId: item.id } : {}),
+    });
+  }
+  function insertImage(image: SpaceRecord) {
+    const markdown = imageMarkdown(image.id, image.title);
+    const next = contentRef.current + (contentRef.current ? "\n\n" : "") + markdown;
+    if (next.length > 100000) {
+      setError("正文已达长度上限；图片已保存在相册，可整理正文后再插入。");
+      return;
+    }
+    contentRef.current = next;
+    setDraft((d) => ({ ...d, content: next }));
+    setPreview(true);
+  }
   const field = <K extends keyof Draft>(key: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [key]: value }));
   const meta = (key: string, value: string | number) =>
@@ -357,6 +410,19 @@ export default function Editor({
             {kind === "contact" && (
               <div className="form-grid">
                 <label className="field">
+                  生日（月-日，公历）
+                  <input
+                    placeholder="05-18"
+                    maxLength={5}
+                    value={String(draft.meta.birthday || "")}
+                    disabled={readOnly || saving}
+                    onChange={(e) => meta("birthday", e.target.value)}
+                  />
+                  <span className="field-hint">
+                    每年显示下一次生日；2 月 29 日在平年按 2 月 28 日提醒。
+                  </span>
+                </label>
+                <label className="field">
                   地址
                   <input
                     maxLength={300}
@@ -455,7 +521,11 @@ export default function Editor({
                   maxLength={100000}
                   value={draft.content}
                   disabled={readOnly || saving}
-                  onChange={(e) => field("content", e.target.value)}
+                  onChange={(e) => {
+                    contentRef.current = e.target.value;
+                    field("content", e.target.value);
+                  }}
+                  onPaste={pasteImages}
                   placeholder="正文或备注，支持 Markdown…"
                 />
                 {preview && (
@@ -467,6 +537,20 @@ export default function Editor({
               <div className="editor-word-count">
                 {draft.content.replace(/\s/g, "").length.toLocaleString()} 字
               </div>
+              {!readOnly && !["file", "photo"].includes(kind) && (
+                <p className="field-hint">
+                  可直接粘贴截图。上传后插入正文，原图保存在相册；关闭编辑器也会保留已上传图片。
+                </p>
+              )}
+              {!readOnly && (
+                <UploadQueue
+                  batch={pasteBatch}
+                  inline
+                  onRunningChange={setPasteRunning}
+                  onUploaded={insertImage}
+                  onComplete={async () => {}}
+                />
+              )}
             </div>
             <div className="form-grid">
               <label className="field">
@@ -486,6 +570,19 @@ export default function Editor({
               </label>
               {kind === "event" && (
                 <>
+                  <label className="field">
+                    主页提醒
+                    <select
+                      value={String(draft.meta.reminderType || "none")}
+                      disabled={readOnly || saving}
+                      onChange={(e) => meta("reminderType", e.target.value)}
+                    >
+                      <option value="none">普通日程</option>
+                      <option value="countdown">倒数日</option>
+                      <option value="subscription">订阅续费</option>
+                    </select>
+                    <span className="field-hint">仅在站内显示；续费后手动更新下次日期。</span>
+                  </label>
                   <label className="field">
                     时间（留空为全天）
                     <input
@@ -671,7 +768,7 @@ export default function Editor({
               <Attachments
                 parent={item}
                 disabled={saving || discard}
-                onRunningChange={setUploadsRunning}
+                onRunningChange={setAttachmentRunning}
               />
             )}
             {!item && !["file", "photo"].includes(kind) && (

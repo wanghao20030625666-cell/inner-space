@@ -1,7 +1,14 @@
 "use client";
 import { useMemo, useReducer, type SetStateAction } from "react";
 import type { Kind, SpaceRecord } from "../lib/model";
-export type EditorState = { kind: Kind; item?: SpaceRecord; date?: string };
+import type { EditorSeed } from "../lib/capture";
+export type EditorState = {
+  kind: Kind;
+  item?: SpaceRecord;
+  date?: string;
+  seed?: EditorSeed;
+  draftKey?: string;
+};
 export type WorkspaceUiState = {
   editor: EditorState | null;
   chooser: boolean;

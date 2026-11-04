@@ -1,5 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import { safeLink } from "../lib/model";
+import { inlineImage } from "../lib/inline-images";
 
 /** Render a small Markdown subset as React nodes; raw HTML is always plain text. */
 function inline(text: string): ReactNode[] {
@@ -23,7 +24,20 @@ export default function Markdown({ text }: { text: string }) {
     nodes: ReactNode[] = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (line.startsWith("```")) {
+    const image = inlineImage(line);
+    if (image)
+      nodes.push(
+        <figure className="markdown-image" key={i}>
+          <img
+            src={image.src}
+            alt={image.alt || "正文图片"}
+            loading="lazy"
+            referrerPolicy="no-referrer"
+          />
+          <figcaption>{image.alt}</figcaption>
+        </figure>,
+      );
+    else if (line.startsWith("```")) {
       const language = line.slice(3).trim(),
         body = [];
       while (++i < lines.length && !lines[i].startsWith("```")) body.push(lines[i]);

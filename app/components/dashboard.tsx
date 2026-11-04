@@ -1,6 +1,8 @@
 "use client";
 import OnThisDay from "./on-this-day";
 import LedgerTrend from "./ledger-trend";
+import Reminders from "./reminders";
+import type { EditorSeed } from "../lib/capture";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -22,7 +24,7 @@ type Props = {
   data: Data;
   now: Date | null;
   busy: boolean;
-  onCreate: (kind: Kind, date?: string) => void;
+  onCreate: (kind: Kind, date?: string, seed?: EditorSeed) => void;
   onOpen: (item: SpaceRecord) => void;
   onNavigate: (view: View) => void;
   onCollection: (c: Collection) => void;
@@ -155,6 +157,11 @@ export default function Dashboard({
               </button>
             </footer>
           </section>
+          <Reminders
+            items={data.reminders}
+            onOpen={onOpen}
+            onCreate={() => onCreate("event", today, { meta: { reminderType: "countdown" } })}
+          />
           {data.pinned.length > 0 && (
             <section className="pinned-section">
               <div className="section-title">

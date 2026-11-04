@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { X, RefreshCw, Check, Upload } from "lucide-react";
 import { fileSize } from "../lib/client";
+import type { SpaceRecord } from "../lib/model";
 import { UploadQueueController, type UploadBatch } from "../lib/upload-queue";
 export type { UploadBatch } from "../lib/upload-queue";
 /** File library and editor attachments use this same queue and progress controls. */
@@ -10,16 +11,31 @@ export default function UploadQueue({
   onComplete,
   inline = false,
   onRunningChange,
+  onUploaded,
 }: {
   batch: UploadBatch | null;
   onComplete: () => Promise<void>;
   inline?: boolean;
   onRunningChange?: (running: boolean) => void;
+  onUploaded?: (item: SpaceRecord) => void;
 }) {
   const [manager] = useState(() => new UploadQueueController()),
     rows = useSyncExternalStore(manager.subscribe, manager.getSnapshot, manager.getSnapshot),
     [error, setError] = useState(""),
-    doneCallback = useRef(onComplete);
+    doneCallback = useRef(onComplete),
+    uploadedCallback = useRef(onUploaded),
+    reported = useRef(new Set<string>());
+  useEffect(() => {
+    uploadedCallback.current = onUploaded;
+  }, [onUploaded]);
+  useEffect(() => {
+    for (const row of rows) {
+      if (row.status === "done" && row.result && !reported.current.has(row.id)) {
+        reported.current.add(row.id);
+        uploadedCallback.current?.(row.result);
+      }
+    }
+  }, [rows]);
   useEffect(() => {
     doneCallback.current = onComplete;
   }, [onComplete]);

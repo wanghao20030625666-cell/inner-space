@@ -12,6 +12,7 @@ export type UploadEntry = Omit<UploadBatch, "files" | "id"> & {
   status: "queued" | "uploading" | "done" | "failed" | "canceled";
   percent: number;
   error?: string;
+  result?: SpaceRecord;
 };
 export type UploadTransport = (
   entry: UploadEntry,
@@ -118,8 +119,10 @@ export class UploadQueueController {
         const abort = new AbortController();
         this.abort = abort;
         try {
-          await this.transport(entry, abort.signal, (percent) => this.patch(entry.id, { percent }));
-          this.patch(entry.id, { status: "done", percent: 100 });
+          const result = await this.transport(entry, abort.signal, (percent) =>
+            this.patch(entry.id, { percent }),
+          );
+          this.patch(entry.id, { status: "done", percent: 100, result });
         } catch (error) {
           const canceled = abort.signal.aborted;
           this.patch(entry.id, {

@@ -6,6 +6,16 @@ import DraftRecovery from "../app/components/draft-recovery";
 import type { DraftData } from "../app/components/draft-state";
 import type { SpaceRecord } from "../app/lib/model";
 describe("safe reading and recovery UI", () => {
+  it("renders only protected inline images", () => {
+    const html = renderToStaticMarkup(
+      createElement(Markdown, {
+        text: "![截图](/api/files/00000000-0000-4000-8000-000000000001)\n![外链](https://track.invalid/p.png)",
+      }),
+    );
+    expect(html.match(/<img /g)).toHaveLength(1);
+    expect(html).toContain('src="/api/files/00000000-0000-4000-8000-000000000001"');
+    expect(html).not.toContain('src="https://');
+  });
   it("renders task-list states without an editing side effect", () => {
     const html = renderToStaticMarkup(
       createElement(Markdown, { text: "- [ ] 未完成\n- [x] 已完成\n- [X] 大写完成" }),

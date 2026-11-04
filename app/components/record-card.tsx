@@ -19,6 +19,7 @@ import { readChecklist } from "./checklist";
 import { moduleFor } from "../lib/catalog";
 import { fileSize, formatDate, formatTime } from "../lib/client";
 import { safeLink, type SpaceRecord, type Collection } from "../lib/model";
+import { trashExpiry } from "../lib/reminders";
 
 export type RecordActions = {
   open: (item: SpaceRecord) => void;
@@ -36,6 +37,8 @@ type Props = {
   collections: Collection[];
   projectProgress?: { total: number; done: number };
   actions: RecordActions;
+  retentionDays?: 0 | 30 | 90;
+  now?: Date;
 };
 export default function RecordCard({
   item: r,
@@ -45,6 +48,8 @@ export default function RecordCard({
   collections,
   projectProgress,
   actions,
+  retentionDays = 0,
+  now,
 }: Props) {
   const onOpen = () => actions.open(r),
     onDuplicate = () => actions.duplicate(r),
@@ -88,6 +93,7 @@ export default function RecordCard({
     setMenu(false);
     fn();
   };
+  const expiry = trashExpiry(r.deletedAt, retentionDays, now);
   return (
     <article
       className={`record-card entry ${list ? "list-card" : ""} ${selected ? "selected-entry" : ""} ${r.status === "done" ? "completed" : ""} ${r.kind === "journal" ? "journal-entry" : ""}`}
@@ -297,6 +303,15 @@ export default function RecordCard({
           </button>
         )}
       </div>
+      {r.deletedAt && (
+        <p className={`trash-expiry ${expiry?.due ? "danger-text" : ""}`}>
+          {expiry
+            ? expiry.due
+              ? "已到保留期限，下次保存内容时可能彻底删除。"
+              : `${expiry.days} 天后达到清理期限 · ${formatTime(expiry.date)}（以实际写入清理为准）`
+            : "自动清理未开启，可随时恢复。"}
+        </p>
+      )}
     </article>
   );
 }

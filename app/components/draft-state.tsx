@@ -21,13 +21,14 @@ export function useDraft(
   data: DraftData,
   readOnly: boolean,
   restore: (d: DraftData) => void,
+  initialData?: DraftData,
 ) {
   const [candidate, setCandidate] = useState<Saved | null>(null),
     [ready, setReady] = useState(false),
     [status, setStatus] = useState("正在读取草稿"),
     [failed, setFailed] = useState(false);
   const latest = useRef(data),
-    baseline = useRef(JSON.stringify(data)),
+    baseline = useRef(JSON.stringify(initialData || data)),
     version = useRef(0),
     stopped = useRef(false),
     pending = useRef<Promise<boolean> | null>(null),

@@ -97,7 +97,11 @@ export function canPatchRecord(
         ? ["readState"]
         : after.kind === "task"
           ? ["projectId"]
-          : [];
+          : after.kind === "contact"
+            ? ["birthday"]
+            : after.kind === "event"
+              ? ["reminderType"]
+              : [];
   if (checked.some((key) => before.meta[key] !== after.meta[key])) return false;
   if (p.get("sort") === "title" && before.title !== after.title) return false;
   return true;

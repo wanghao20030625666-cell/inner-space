@@ -1,6 +1,7 @@
 import { strToU8, strFromU8, zip, unzipSync, type Zippable, type Unzipped } from "fflate";
 import { api, type Data } from "./client";
 import { allRecords, download } from "./exports";
+import { imageIds, remapImages } from "./inline-images";
 import {
   recordInput,
   localDate,
@@ -54,6 +55,23 @@ export async function buildBackup(
       ...(await allRecords(new URLSearchParams({ scope: "trash", ...filter }))),
     ],
     data = collection ? null : await api<Data>("/api/space");
+  // Unsaved-note pastes may live in the album without parentId; include referenced image bytes too.
+  const known = new Set(records.map((r) => r.id));
+  const referenced = new Set(records.flatMap((r) => imageIds(r.content)));
+  if (referenced.size > 1000) throw Error("引用图片超过 1000 张，请分批导出");
+  for (const id of referenced) {
+    if (known.has(id)) continue;
+    const normal = await api<Data>(`/api/space?id=${encodeURIComponent(id)}&scope=all&lite=1`);
+    const image =
+      normal.items[0] ||
+      (await api<Data>(`/api/space?id=${encodeURIComponent(id)}&scope=trash&lite=1`)).items[0];
+    if (!image || !["photo", "file"].includes(image.kind)) {
+      if (withFiles) throw Error("正文引用的图片已缺失，ZIP 未生成；可先导出 JSON 保存文字");
+      continue;
+    }
+    records.push(image);
+    known.add(id);
+  }
   const prefix = collection
     ? `隐序-专题-${collection.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").slice(0, 40)}`
     : "隐序";
@@ -196,6 +214,7 @@ export async function restoreBackup(prepared: PreparedBackup, progress: (s: stri
   const { backup, entries } = prepared,
     groups = new Map<string, string>(),
     ids = new Map<string, string>(),
+    restored = new Map<string, SpaceRecord>(),
     trash: { id: string; version: number }[] = [];
   let count = 0,
     files = 0,
@@ -270,8 +289,24 @@ export async function restoreBackup(prepared: PreparedBackup, progress: (s: stri
         ).item;
       }
       ids.set(r.id, item.id);
+      restored.set(r.id, item);
       count++;
       if (r.deletedAt) trash.push({ id: item.id, version: item.version });
+    }
+    // Inline IDs can only be rewritten after every image has its new, authorized ID.
+    for (const original of backup.records) {
+      const item = restored.get(original.id);
+      if (!item) continue;
+      const content = remapImages(String(original.content || ""), ids, true);
+      if (content === item.content) continue;
+      const updated = (
+        await api<{ item: SpaceRecord }>("/api/space", {
+          method: "PATCH",
+          body: JSON.stringify({ id: item.id, version: item.version, content }),
+        })
+      ).item;
+      const pending = trash.find((x) => x.id === item.id);
+      if (pending) pending.version = updated.version;
     }
     // Restore all relation targets before returning their source records to trash.
     for (const item of trash)

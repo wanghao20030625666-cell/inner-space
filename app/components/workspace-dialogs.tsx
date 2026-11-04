@@ -1,12 +1,13 @@
 "use client";
 import { Check } from "lucide-react";
 import Modal from "./modal";
-import Editor from "./editor";
+import { lazy, Suspense } from "react";
 import ImageViewer from "./image-viewer";
 import { modules } from "../lib/catalog";
 import { api, type Data } from "../lib/client";
 import type { Kind, SpaceRecord, View } from "../lib/model";
 import type { WorkspaceUi } from "../hooks/use-workspace-ui";
+const Editor = lazy(() => import("./editor"));
 /** Modal and confirmation flows are kept separate from navigation and list rendering. */
 export default function WorkspaceDialogs({
   ui,
@@ -102,33 +103,45 @@ export default function WorkspaceDialogs({
         </Modal>
       )}
       {editor && (
-        <Editor
-          key={editor.item?.id || editor.kind + (editor.date || "")}
-          kind={editor.kind}
-          item={editor.item}
-          date={editor.date}
-          collections={data.collections}
-          collectionId={collectionId === "none" ? null : collectionId || null}
-          onClose={() => {
-            setEditor(null);
-            if (editor.kind === "project") void refreshCurrent();
-          }}
-          onSaved={async (item, notice) => {
-            const previous = editor.item;
-            setEditor(null);
-            await onRecordSaved(previous, item);
-            setToast(notice || "已保存");
-          }}
-          onTrash={async (item) => {
-            await api("/api/space", {
-              method: "PATCH",
-              body: JSON.stringify({ id: item.id, version: item.version, action: "trash" }),
-            });
-            setEditor(null);
-            await refreshCurrent();
-            setToast("已移入回收站");
-          }}
-        />
+        <Suspense
+          fallback={
+            <Modal title="正在打开编辑器" onClose={() => setEditor(null)}>
+              <p className="lazy-loading" role="status">
+                正在准备编辑内容…
+              </p>
+            </Modal>
+          }
+        >
+          <Editor
+            key={editor.item?.id || editor.draftKey || editor.kind + (editor.date || "")}
+            kind={editor.kind}
+            item={editor.item}
+            date={editor.date}
+            seed={editor.seed}
+            draftKey={editor.draftKey}
+            collections={data.collections}
+            collectionId={collectionId === "none" ? null : collectionId || null}
+            onClose={() => {
+              setEditor(null);
+              if (editor.kind === "project") void refreshCurrent();
+            }}
+            onSaved={async (item, notice) => {
+              const previous = editor.item;
+              setEditor(null);
+              await onRecordSaved(previous, item);
+              setToast(notice || "已保存");
+            }}
+            onTrash={async (item) => {
+              await api("/api/space", {
+                method: "PATCH",
+                body: JSON.stringify({ id: item.id, version: item.version, action: "trash" }),
+              });
+              setEditor(null);
+              await refreshCurrent();
+              setToast("已移入回收站");
+            }}
+          />
+        </Suspense>
       )}
       {collectionEditor && (
         <Modal

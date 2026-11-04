@@ -17,6 +17,7 @@ import { api } from "../lib/client";
 import { normalizePreferences, preferencesReducer, samePreferences } from "../lib/preferences";
 
 import DataTools from "./data-tools";
+import CaptureTools from "./capture-tools";
 import type { Kind } from "../lib/model";
 type Props = {
   preferences: Preferences;
@@ -254,6 +255,7 @@ export default function SettingsPanel({
           </a>
         </section>
         <DataTools notify={notify} onChanged={onImported} onResume={onResume} />
+        <CaptureTools />
         <section className="panel settings-card">
           <div className="data-action">
             <div>
