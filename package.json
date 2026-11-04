@@ -1,6 +1,6 @@
 {
   "name": "inner-space",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -19,7 +19,7 @@
     "format": "prettier --write app db docs worker tests scripts/test-*.mjs scripts/benchmark-search.mjs README.md CHANGELOG.md package.json eslint.config.mjs vitest.config.ts .github/workflows/ci.yml",
     "format:check": "prettier --check app db docs worker tests scripts/test-*.mjs scripts/benchmark-search.mjs README.md CHANGELOG.md package.json eslint.config.mjs vitest.config.ts .github/workflows/ci.yml",
     "test:unit": "vitest run",
-    "test:integration": "node scripts/test-api.mjs && node scripts/test-features.mjs && node scripts/test-complete.mjs && node scripts/test-boundaries.mjs && node scripts/test-regressions.mjs && node scripts/test-round3.mjs && node scripts/test-daily.mjs"
+    "test:integration": "node scripts/test-api.mjs && node scripts/test-features.mjs && node scripts/test-complete.mjs && node scripts/test-boundaries.mjs && node scripts/test-regressions.mjs && node scripts/test-round3.mjs && node scripts/test-daily.mjs && node scripts/test-round4.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.31.0",

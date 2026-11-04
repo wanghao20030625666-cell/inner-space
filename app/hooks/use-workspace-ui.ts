@@ -2,6 +2,7 @@
 import { useMemo, useReducer, type SetStateAction } from "react";
 import type { Kind, SpaceRecord } from "../lib/model";
 import type { EditorSeed } from "../lib/capture";
+import type { TrashSnapshot } from "../lib/trash";
 export type EditorState = {
   kind: Kind;
   item?: SpaceRecord;
@@ -17,6 +18,7 @@ export type WorkspaceUiState = {
   undo: SpaceRecord[];
   deleteItem: SpaceRecord | null;
   bulkTrash: boolean;
+  trashDelete: TrashSnapshot | null;
   collectionEditor: { id?: string; name: string; color: string } | null;
   collectionError: string;
 };
@@ -28,6 +30,7 @@ export const initialWorkspaceUi: WorkspaceUiState = {
   undo: [],
   deleteItem: null,
   bulkTrash: false,
+  trashDelete: null,
   collectionEditor: null,
   collectionError: "",
 };

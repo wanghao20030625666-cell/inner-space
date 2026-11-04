@@ -40,6 +40,7 @@ yarn-error.log*
 /.codex/
 /outputs/
 /work/
+/.playwright-cli/
 
 # OS metadata
 .DS_Store

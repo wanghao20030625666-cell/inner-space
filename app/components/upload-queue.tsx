@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { X, RefreshCw, Check, Upload } from "lucide-react";
+import { X, RefreshCw, Check, Upload, ChevronDown, ChevronUp } from "lucide-react";
 import { fileSize } from "../lib/client";
 import type { SpaceRecord } from "../lib/model";
 import { UploadQueueController, type UploadBatch } from "../lib/upload-queue";
@@ -22,6 +22,7 @@ export default function UploadQueue({
   const [manager] = useState(() => new UploadQueueController()),
     rows = useSyncExternalStore(manager.subscribe, manager.getSnapshot, manager.getSnapshot),
     [error, setError] = useState(""),
+    [collapsed, setCollapsed] = useState(false),
     doneCallback = useRef(onComplete),
     uploadedCallback = useRef(onUploaded),
     reported = useRef(new Set<string>());
@@ -53,6 +54,7 @@ export default function UploadQueue({
     if (!batch) return;
     try {
       setError("");
+      setCollapsed(false);
       manager.enqueue(batch);
     } catch (e) {
       setError(e instanceof Error ? e.message : "添加队列失败");
@@ -66,7 +68,7 @@ export default function UploadQueue({
   if (!rows.length && !error) return null;
   return (
     <section
-      className={`upload-queue ${inline ? "inline-upload-queue" : ""}`}
+      className={`upload-queue ${inline ? "inline-upload-queue" : ""} ${collapsed ? "collapsed" : ""}`}
       aria-label={inline ? "附件上传队列" : "文件上传队列"}
     >
       <header>
@@ -75,25 +77,42 @@ export default function UploadQueue({
           {inline ? "附件上传" : "文件上传"} · {rows.filter((r) => r.status === "done").length}/
           {rows.length}
         </strong>
-        {running ? (
-          <button type="button" aria-label="取消未完成上传" onClick={() => manager.cancel()}>
-            取消未完成
-          </button>
-        ) : (
+        <div className="upload-controls">
           <button
             type="button"
-            aria-label="关闭上传队列"
-            onClick={() => {
-              manager.clear();
-              setError("");
-            }}
+            aria-label={collapsed ? "展开上传队列" : "收起上传队列，不取消上传"}
+            aria-expanded={!collapsed}
+            onClick={() => setCollapsed((value) => !value)}
           >
-            <X size={16} />
+            {collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
-        )}
+          {running ? (
+            !collapsed && (
+              <button type="button" aria-label="取消未完成上传" onClick={() => manager.cancel()}>
+                取消未完成
+              </button>
+            )
+          ) : (
+            <button
+              type="button"
+              aria-label="关闭上传队列"
+              onClick={() => {
+                manager.clear();
+                setError("");
+              }}
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
       </header>
-      {error && <p role="alert">{error}</p>}
-      <div>
+      {collapsed && running && (
+        <p role="status" className="compact-upload-status">
+          正在上传，收起后继续运行
+        </p>
+      )}
+      {error && !collapsed && <p role="alert">{error}</p>}
+      <div hidden={collapsed}>
         {rows.map((r) => (
           <article key={r.id}>
             <span>
@@ -135,10 +154,12 @@ export default function UploadQueue({
           </article>
         ))}
       </div>
-      <p>
-        整批结束后刷新列表。
-        {inline ? "关闭编辑窗口会取消未完成的上传；已成功的附件会保留。" : "已成功的文件会保留。"}
-      </p>
+      {!collapsed && (
+        <p>
+          整批结束后刷新列表。
+          {inline ? "关闭编辑窗口会取消未完成的上传；已成功的附件会保留。" : "已成功的文件会保留。"}
+        </p>
+      )}
     </section>
   );
 }

@@ -2131,6 +2131,15 @@ input[type="checkbox"] {
     width: 230px;
   }
   .top-new {
+    display: inline-flex;
+    min-width: 34px;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .top-new > span {
     display: none;
   }
   .home-intro > .button {

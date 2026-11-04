@@ -42,6 +42,7 @@ import WorkspaceSidebar from "./components/workspace-sidebar";
 import CollectionExport from "./components/collection-export";
 import CommandPalette from "./components/command-palette";
 import CapturePrompt from "./components/capture-prompt";
+import type { TrashRef } from "./lib/trash";
 import { readCaptureHash, captureSeed, type CaptureRequest, type EditorSeed } from "./lib/capture";
 const CalendarView = lazy(() => import("./components/calendar")),
   ActivityList = lazy(() => import("./components/activity-list")),
@@ -89,6 +90,7 @@ export default function Workspace({
     setSelected,
     setDeleteItem,
     setBulkTrash,
+    setTrashDelete,
     setCollectionEditor,
     setCollectionError,
   } = ui;
@@ -362,6 +364,25 @@ export default function Workspace({
     }
     setSelected((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
   };
+  async function reviewTrash(all: boolean) {
+    setBusy(true);
+    try {
+      const items = all
+        ? (await api<{ items: TrashRef[] }>("/api/trash")).items
+        : data.items
+            .filter((r) => selected.includes(r.id) && r.deletedAt)
+            .map(({ id, version }) => ({ id, version }));
+      if (!items.length) {
+        setToast("回收站中没有需要删除的内容");
+        return;
+      }
+      setTrashDelete({ items, all });
+    } catch (e) {
+      notifyError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
   const addCollection = () => {
     setCollectionError("");
     setCollectionEditor({ name: "", color: "green" });
@@ -419,7 +440,15 @@ export default function Workspace({
                 ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                aria-label="搜索所有内容"
+                aria-label="搜索当前范围内容"
+                aria-describedby="search-scope"
+                title={
+                  view === "trash"
+                    ? "仅搜索回收站"
+                    : view === "archive"
+                      ? "仅搜索归档"
+                      : "搜索记录、正文和标签，不包含归档与回收站"
+                }
                 placeholder="搜索记录、正文、标签"
               />
               {query ? (
@@ -446,17 +475,16 @@ export default function Workspace({
             >
               <RefreshCw size={17} className={loading ? "spin" : ""} />
             </button>
-            <button
-              className="button primary top-new"
-              onClick={() =>
-                kinds.includes(view as Kind) && !activeSearch
-                  ? create(view as Kind)
-                  : setChooser(true)
-              }
-            >
-              <Plus size={16} />
-              新建
-            </button>
+            {!["trash", "archive"].includes(view) && (
+              <button
+                className="button primary top-new"
+                aria-label="新建内容"
+                onClick={() => setChooser(true)}
+              >
+                <Plus size={16} />
+                <span>新建</span>
+              </button>
+            )}
           </div>
         </header>
         <main
@@ -479,6 +507,13 @@ export default function Workspace({
             }
           }}
         >
+          <p id="search-scope" className="search-scope">
+            {view === "trash"
+              ? "搜索范围：回收站。"
+              : view === "archive"
+                ? "搜索范围：归档。"
+                : "搜索范围：标题、正文与标签，不包含归档和回收站。"}
+          </p>
           {dropActive && (
             <div className="drop-overlay">
               <Upload size={32} />
@@ -492,9 +527,27 @@ export default function Workspace({
                   {activeSearch ? "搜索结果" : view === "collection" ? "我的专题" : "工作空间"}
                 </div>
                 <h1>{activeSearch ? `“${search}”` : current.name}</h1>
-                <p>{activeSearch ? "匹配标题、正文和标签。" : current.description}</p>
+                <p>
+                  {activeSearch
+                    ? view === "trash"
+                      ? "仅匹配回收站内的标题、正文和标签。"
+                      : view === "archive"
+                        ? "仅匹配归档内的标题、正文和标签。"
+                        : "匹配标题、正文和标签，不包含归档和回收站。"
+                    : current.description}
+                </p>
               </div>
               <div className="heading-actions">
+                {view === "trash" && (
+                  <button
+                    className="button secondary danger-text"
+                    disabled={busy}
+                    onClick={() => void reviewTrash(true)}
+                  >
+                    <Trash2 size={14} />
+                    清空回收站
+                  </button>
+                )}
                 {view === "collection" && selectedCollection && !activeSearch && (
                   <CollectionExport collection={selectedCollection} notify={setToast} />
                 )}
@@ -813,9 +866,21 @@ export default function Workspace({
                     {selected.length > 0 && (
                       <div className="bulk-actions">
                         {view === "trash" ? (
-                          <button disabled={busy} onClick={() => void bulk({ action: "restore" })}>
-                            恢复
-                          </button>
+                          <>
+                            <button
+                              disabled={busy}
+                              onClick={() => void bulk({ action: "restore" })}
+                            >
+                              恢复
+                            </button>
+                            <button
+                              className="danger-text"
+                              disabled={busy}
+                              onClick={() => void reviewTrash(false)}
+                            >
+                              彻底删除所选
+                            </button>
+                          </>
                         ) : (
                           <>
                             <button disabled={busy} onClick={() => void bulk({ favorite: true })}>

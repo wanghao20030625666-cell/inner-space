@@ -6,6 +6,7 @@ import type { Preferences, SpaceRecord } from "../lib/model";
 /** Owns cursor/request generations so a late response cannot paint the wrong module. */
 export function useSpaceData(filters: SpaceFilters, preferences: Preferences, onReset: () => void) {
   const dataKey = spaceParams(filters).toString(),
+    moduleContext = filters.view !== "overview" || !!filters.search,
     [data, setData] = useState<Data>({ ...initialData, preferences }),
     [loading, setLoading] = useState(true),
     [error, setError] = useState(""),
@@ -29,9 +30,14 @@ export function useSpaceData(filters: SpaceFilters, preferences: Preferences, on
       if (!append) setLoading(true);
       try {
         const p = new URLSearchParams(dataKey);
+        if (moduleContext) {
+          p.set("lite", "1");
+          p.set("context", "module");
+        }
         if (append && cursor.current) {
           p.set("cursor", cursor.current);
           p.set("lite", "1");
+          p.delete("context");
         }
         const result = await api<Data>(`/api/space?${p}`);
         if (id !== serial.current || currentKey.current !== dataKey) return;
@@ -54,7 +60,7 @@ export function useSpaceData(filters: SpaceFilters, preferences: Preferences, on
         if (id === serial.current) setLoading(false);
       }
     },
-    [dataKey, onReset],
+    [dataKey, moduleContext, onReset],
   );
   useEffect(() => {
     reloadRef.current = () => reload();

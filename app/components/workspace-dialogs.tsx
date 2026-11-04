@@ -1,8 +1,9 @@
 "use client";
 import { Check } from "lucide-react";
 import Modal from "./modal";
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import ImageViewer from "./image-viewer";
+import TrashDeleteDialog from "./trash-delete-dialog";
 import { modules } from "../lib/catalog";
 import { api, type Data } from "../lib/client";
 import type { Kind, SpaceRecord, View } from "../lib/model";
@@ -46,6 +47,7 @@ export default function WorkspaceDialogs({
       selected,
       deleteItem,
       bulkTrash,
+      trashDelete,
       collectionEditor,
       collectionError,
     },
@@ -54,12 +56,26 @@ export default function WorkspaceDialogs({
     setImageIndex,
     setDeleteItem,
     setBulkTrash,
+    setTrashDelete,
     setCollectionEditor,
     setCollectionError,
   } = ui;
+  const duplicateCollection =
+    collectionEditor &&
+    data.collections.some(
+      (c) =>
+        c.id !== collectionEditor.id &&
+        c.name.trim().normalize("NFKC").toLocaleLowerCase() ===
+          collectionEditor.name.trim().normalize("NFKC").toLocaleLowerCase(),
+    );
+  const [allowDuplicate, setAllowDuplicate] = useState<typeof collectionEditor>(null);
   const notifyError = (e: unknown) => setToast(e instanceof Error ? e.message : "操作未完成");
   async function saveCollection() {
     if (!collectionEditor) return;
+    if (duplicateCollection && allowDuplicate !== collectionEditor) {
+      setCollectionError("已有同名专题，请修改名称，或勾选仍然保存。");
+      return;
+    }
     setBusy(true);
     setCollectionError("");
     try {
@@ -78,6 +94,13 @@ export default function WorkspaceDialogs({
   }
   return (
     <>
+      {trashDelete && (
+        <TrashDeleteDialog
+          snapshot={trashDelete}
+          onClose={() => setTrashDelete(null)}
+          onFinished={refreshCurrent}
+        />
+      )}
       {imageIndex !== null && (
         <ImageViewer
           items={data.items.filter((r) => r.kind === "photo" && !r.deletedAt)}
@@ -186,6 +209,16 @@ export default function WorkspaceDialogs({
                 ))}
               </div>
             </div>
+            {duplicateCollection && (
+              <label className="duplicate-warning">
+                <input
+                  type="checkbox"
+                  checked={allowDuplicate === collectionEditor}
+                  onChange={(e) => setAllowDuplicate(e.target.checked ? collectionEditor : null)}
+                />
+                已有同名专题，仍然保存这个名称
+              </label>
+            )}
             {collectionError && <p className="form-error">{collectionError}</p>}
             <div className="collection-form-actions">
               {collectionEditor.id && (
@@ -256,11 +289,14 @@ export default function WorkspaceDialogs({
       {deleteItem && (
         <Modal
           title="彻底删除这条内容？"
-          subtitle={`“${deleteItem.title}”的内容、历史版本和附件将无法恢复。`}
+          subtitle="内容及其历史版本无法恢复。单独保存的附件和相册图片按各自记录保留。"
           onClose={() => {
             if (!busy) setDeleteItem(null);
           }}
         >
+          <p className="delete-record-title" title={deleteItem.title}>
+            {deleteItem.title}
+          </p>
           <div className="confirm-actions">
             <button className="button secondary" onClick={() => setDeleteItem(null)}>
               取消

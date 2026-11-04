@@ -142,7 +142,9 @@ export default function CalendarView({
                   <span>{day.getDate()}</span>
                   <div>
                     {events.slice(0, 2).map((r) => (
-                      <small key={r.id}>{r.title}</small>
+                      <small key={r.id} title={r.title}>
+                        {r.title}
+                      </small>
                     ))}
                     {events.length > 2 && <small>还有 {events.length - 2} 项</small>}
                   </div>

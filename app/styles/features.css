@@ -618,6 +618,43 @@ fieldset.editor-fields {
   width: 100%;
   height: 6px;
   accent-color: var(--primary);
+  appearance: none;
+  border: 0;
+  background: var(--surface2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.category-bars progress::-webkit-progress-bar {
+  background: var(--surface2);
+}
+.category-bars progress::-webkit-progress-value {
+  background: var(--primary);
+}
+.category-bars progress::-moz-progress-bar {
+  background: var(--primary);
+}
+.category-zero {
+  color: var(--muted);
+}
+.upload-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.upload-queue.collapsed:not(.inline-upload-queue) {
+  width: min(265px, calc(100vw - 30px));
+}
+.upload-queue .compact-upload-status {
+  padding: 7px 18px;
+}
+.search-scope {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 .monthly-ledger {
   padding: 8px 22px 17px;

@@ -70,7 +70,17 @@ export default function Ledger({
             {value.categories.map((c) => (
               <div key={c.name}>
                 <span>{c.name}</span>
-                <progress max={Math.max(1, value.expenseCents)} value={c.cents} />
+                {c.cents > 0 && value.expenseCents > 0 ? (
+                  <progress
+                    aria-label={`${c.name}占支出比例`}
+                    max={value.expenseCents}
+                    value={c.cents}
+                  />
+                ) : (
+                  <span className="category-zero" aria-label="无支出">
+                    —
+                  </span>
+                )}
                 <strong>¥ {money(c.cents)}</strong>
               </div>
             ))}
