@@ -24,15 +24,21 @@ export async function body(request: Request) {
   try { return JSON.parse(text); } catch { throw new ApiError(400, "数据格式无效"); }
 }
 export function validateRecord(data: unknown) { const result = recordInput.safeParse(data); if (!result.success) throw new ApiError(400, result.error.issues[0].message); return result.data; }
+/** Relation IDs are authorized independently; a valid UUID does not imply ownership. */
+export async function validateLinks(owner: string, value: ReturnType<typeof validateRecord>, previous?: SpaceRecord) {
+  if (value.collectionId && !await database().prepare("SELECT id FROM collections WHERE id = ? AND owner = ?").bind(value.collectionId, owner).first()) throw new ApiError(400, "专题不存在，请重新选择");
+  if (value.kind === "task" && value.meta.projectId && (previous?.kind !== "task" || previous.meta.projectId !== value.meta.projectId) && !await database().prepare("SELECT id FROM records WHERE id = ? AND owner = ? AND kind = 'project' AND deleted_at IS NULL").bind(String(value.meta.projectId), owner).first()) throw new ApiError(400, "关联项目不存在或已被删除");
+}
 export async function ownedRecord(owner: string, id: string) {
   const row = await database().prepare("SELECT * FROM records WHERE owner = ? AND id = ?").bind(owner, id).first<Record<string, unknown>>();
   if (!row) throw new ApiError(404, "记录不存在或无权访问"); return fromRow(row);
 }
 /** A content record and its activity entry commit in the same transaction. */
 export async function createRecord(owner: string, value: ReturnType<typeof validateRecord>, id = crypto.randomUUID()) {
+  await validateLinks(owner, value);
   const now = new Date().toISOString(), item: SpaceRecord = { ...value, id, createdAt: now, updatedAt: now, deletedAt: null, version: 1 }, db = database();
   await db.batch([
-    db.prepare("INSERT INTO records (id, owner, kind, title, content, tags, meta, favorite, status, due_at, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)").bind(id, owner, item.kind, item.title, item.content, JSON.stringify(item.tags), JSON.stringify(item.meta), item.favorite ? 1 : 0, item.status, item.dueAt, now, now),
+    db.prepare("INSERT INTO records (id, owner, kind, title, content, tags, meta, favorite, pinned, collection_id, status, due_at, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)").bind(id, owner, item.kind, item.title, item.content, JSON.stringify(item.tags), JSON.stringify(item.meta), item.favorite ? 1 : 0, item.pinned ? 1 : 0, item.collectionId, item.status, item.dueAt, now, now),
     db.prepare("INSERT INTO audit (id, owner, action, title, record_id, created_at) VALUES (?, ?, '创建', ?, ?, ?)").bind(crypto.randomUUID(), owner, item.title, id, now),
   ]); return item;
 }

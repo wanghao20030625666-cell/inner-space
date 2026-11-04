@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "隐序 · 私人空间",
-  description: "一个只属于自己的空间。安放想法，整理生活，专注当下。",
+  description: "隐序个人工作台：管理笔记、待办、专题、收藏和日常资料。",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

@@ -1,6 +1,6 @@
 {
   "name": "inner-space",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "typecheck": "tsc --noEmit",
     "test:api": "node scripts/test-api.mjs",
-    "test:boundaries": "python scripts/test-boundaries.py"
+    "test:boundaries": "python scripts/test-boundaries.py",
+    "test:features": "node scripts/test-features.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

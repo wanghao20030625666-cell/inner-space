@@ -1,7 +1,7 @@
-import { defaultPreferences, type Activity, type Kind, type Preferences, type SpaceRecord } from "./model";
+import { defaultPreferences, type Activity, type Kind, type Preferences, type SpaceRecord, type Collection } from "./model";
 export type Count = { kind: Kind; status: string; favorite: number; deleted: number; count: number };
-export type Data = { items: SpaceRecord[]; activity: Activity[]; preferences: Preferences; counts: Count[]; dueTasks: SpaceRecord[]; upcoming: SpaceRecord[]; nextCursor: string | null };
-export const initialData: Data = { items: [], activity: [], preferences: defaultPreferences, counts: [], dueTasks: [], upcoming: [], nextCursor: null };
+export type Data = { items: SpaceRecord[]; recent: SpaceRecord[]; activity: Activity[]; preferences: Preferences; counts: Count[]; dueTasks: SpaceRecord[]; upcoming: SpaceRecord[]; pinned: SpaceRecord[]; collections: Collection[]; tags: {name: string; count: number}[]; total: number; stats: {fileBytes: number; unread: number; overdue: number}; projectTasks: {projectId: string; total: number; done: number}[]; nextCursor: string | null };
+export const initialData: Data = { items: [], recent: [], activity: [], preferences: defaultPreferences, counts: [], dueTasks: [], upcoming: [], pinned: [], collections: [], tags: [], total: 0, stats: {fileBytes: 0, unread: 0, overdue: 0}, projectTasks: [], nextCursor: null };
 /** Centralized API handling never turns an unsuccessful write into a success toast. */
 export async function api<T = Record<string, unknown>>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, { ...options, headers: options?.body instanceof FormData ? options.headers : { "Content-Type": "application/json", ...options?.headers }, cache: "no-store" });

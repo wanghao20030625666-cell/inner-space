@@ -21,7 +21,8 @@ export async function POST(request: Request) {
     if (kind === "photo" && !mime) throw new ApiError(400, "相册支持 JPG、PNG、GIF 和 WebP 图片");
     const id = crypto.randomUUID(), key = `${owner}/${id}`;
     await bucket().put(key, bytes, { httpMetadata: { contentType: mime || "application/octet-stream" } }); uploadedKey = key;
-    const item = await createRecord(owner, { kind, title: file.name.slice(0, 160), content: "", tags: [], favorite: false, status: "active", dueAt: null, meta: { key, size: file.size, mime: mime || "application/octet-stream", filename: file.name.slice(0, 200) } }, id);
+    const collectionId = typeof form.get("collectionId") === "string" ? String(form.get("collectionId")) : null;
+    const item = await createRecord(owner, { kind, title: file.name.slice(0, 160), content: "", tags: [], favorite: false, pinned: false, collectionId: collectionId || null, status: "active", dueAt: null, meta: { key, size: file.size, mime: mime || "application/octet-stream", filename: file.name.slice(0, 200) } }, id);
     return json({ item }, 201);
   } catch (e) {
     if (uploadedKey) { try { await bucket().delete(uploadedKey); } catch { /* Preserve the original error. */ } }
