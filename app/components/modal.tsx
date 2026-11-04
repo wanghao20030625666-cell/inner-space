@@ -24,7 +24,8 @@ export default function Modal({
     const before = document.activeElement as HTMLElement;
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    ref.current?.focus();
+    // Keep an explicitly autofocus'd search/input ready for immediate typing.
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();

@@ -1,6 +1,6 @@
 {
   "name": "inner-space",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -16,48 +16,48 @@
     "test:api": "node scripts/test-api.mjs",
     "test:boundaries": "node scripts/test-boundaries.mjs",
     "test:features": "node scripts/test-features.mjs",
-    "format": "prettier --write app db docs worker tests scripts/test-*.mjs README.md package.json eslint.config.mjs vitest.config.ts .github/workflows/ci.yml",
-    "format:check": "prettier --check app db docs worker tests scripts/test-*.mjs README.md package.json eslint.config.mjs vitest.config.ts .github/workflows/ci.yml",
+    "format": "prettier --write app db docs worker tests scripts/test-*.mjs scripts/benchmark-search.mjs README.md package.json eslint.config.mjs vitest.config.ts .github/workflows/ci.yml",
+    "format:check": "prettier --check app db docs worker tests scripts/test-*.mjs scripts/benchmark-search.mjs README.md package.json eslint.config.mjs vitest.config.ts .github/workflows/ci.yml",
     "test:unit": "vitest run",
-    "test:integration": "node scripts/test-api.mjs && node scripts/test-features.mjs && node scripts/test-complete.mjs && node scripts/test-boundaries.mjs && node scripts/test-regressions.mjs"
+    "test:integration": "node scripts/test-api.mjs && node scripts/test-features.mjs && node scripts/test-complete.mjs && node scripts/test-boundaries.mjs && node scripts/test-regressions.mjs && node scripts/test-round3.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.31.0",
-    "next": "16.3.4",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
-    "zod": "^3.25.76",
+    "next": "16.4.5",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "zod": "4.6.7",
     "fflate": "0.8.3",
     "drizzle-orm": "0.45.2"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.37.1",
-    "@cloudflare/workers-types": "4.20260515.1",
+    "@cloudflare/vite-plugin": "1.67.0",
+    "@cloudflare/workers-types": "5.20261104.1",
     "@tailwindcss/postcss": "4.2.1",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.26",
+    "@vitejs/plugin-rsc": "0.5.37",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "eslint-config-next": "16.3.4",
     "json-rpc-2.0": "1.7.1",
     "raw-body": "3.0.2",
-    "react-server-dom-webpack": "19.2.6",
+    "react-server-dom-webpack": "19.3.1",
     "tailwindcss": "4.2.1",
     "tw-animate-css": "^1.4.0",
     "typescript": "5.9.3",
-    "vinext": "1.0.0-beta.5",
-    "vite": "8.0.13",
-    "wrangler": "4.92.0",
+    "vinext": "1.4.3",
+    "vite": "8.3.5",
+    "wrangler": "4.157.0",
     "prettier": "3.9.10",
     "vitest": "5.1.0"
   },
   "type": "module",
   "overrides": {
     "miniflare": {
-      "sharp": "0.35.4"
+      "sharp": "0.35.5"
     }
   }
 }

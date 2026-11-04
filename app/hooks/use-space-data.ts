@@ -66,7 +66,8 @@ export function useSpaceData(filters: SpaceFilters, preferences: Preferences, on
     (before: SpaceRecord | undefined, item: SpaceRecord) => {
       if (
         currentKey.current !== dataKey ||
-        !canPatchRecord(new URLSearchParams(dataKey), before, item, dataRef.current.nextCursor)
+        dataRef.current.preferences.trashRetentionDays > 0 ||
+        !canPatchRecord(new URLSearchParams(dataKey), before, item)
       )
         return false;
       setData((prev) =>

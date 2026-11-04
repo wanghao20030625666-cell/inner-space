@@ -12,7 +12,9 @@ export default function ProjectTasks({ project }: { project: SpaceRecord }) {
     [total, setTotal] = useState(0),
     [done, setDone] = useState(0);
   const load = useCallback(async () => {
-    const r = await api<Data>(`/api/space?kind=task&project=${project.id}`);
+    const r = await api<Data>(
+      `/api/space?kind=task&project=${encodeURIComponent(project.id)}&lite=1`,
+    );
     setItems(r.items);
     setTotal(r.total);
     setDone(r.projectTasks.find((p) => p.projectId === project.id)?.done || 0);

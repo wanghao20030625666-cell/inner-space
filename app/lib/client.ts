@@ -5,6 +5,7 @@ import {
   type Preferences,
   type SpaceRecord,
   type Collection,
+  type View,
 } from "./model";
 export type Count = {
   kind: Kind;
@@ -13,6 +14,30 @@ export type Count = {
   deleted: number;
   count: number;
 };
+/** Shared active counts exclude trash and archived records unless that view is requested. */
+export function countByKind(counts: Count[], kind: Kind, status?: string) {
+  return counts
+    .filter(
+      (c) =>
+        !c.deleted &&
+        c.status !== "archived" &&
+        c.kind === kind &&
+        (!status || c.status === status),
+    )
+    .reduce((sum, c) => sum + c.count, 0);
+}
+export function countByView(counts: Count[], view: View) {
+  return counts
+    .filter((c) =>
+      view === "trash"
+        ? !!c.deleted
+        : !c.deleted &&
+          (view === "archive"
+            ? c.status === "archived"
+            : c.status !== "archived" && (view === "favorites" ? !!c.favorite : c.kind === view)),
+    )
+    .reduce((sum, c) => sum + c.count, 0);
+}
 export type LedgerData = {
   count: number;
   incomeCents: number;

@@ -23,6 +23,7 @@ import DraftRecovery from "./draft-recovery";
 import FilePreview from "./file-preview";
 import { useDraft, type DraftData } from "./draft-state";
 import { exportRecord } from "../lib/exports";
+import { completeEditorClose, type CloseChoice } from "../lib/editor-close";
 type Draft = DraftData;
 const newDraft = (kind: Kind): Draft => ({
   kind,
@@ -94,7 +95,8 @@ export default function Editor({
     >(null),
     [projects, setProjects] = useState<SpaceRecord[]>([]),
     [wantTrash, setWantTrash] = useState(false),
-    [discard, setDiscard] = useState(false);
+    [discard, setDiscard] = useState(false),
+    [uploadsRunning, setUploadsRunning] = useState(false);
   const m = moduleFor(kind),
     readOnly = !!item?.deletedAt;
   const draftState = useDraft(
@@ -109,19 +111,44 @@ export default function Editor({
     setDraft((d) => ({ ...d, meta: { ...d.meta, [key]: value } }));
   const close = () => {
     if (!saving) {
-      if (!readOnly && JSON.stringify(draft) !== initial.current)
-        void draftState.flush().then(() => setDiscard(true));
+      if (discard) setDiscard(false);
+      else if ((!readOnly && JSON.stringify(draft) !== initial.current) || uploadsRunning)
+        setDiscard(true);
       else onClose();
     }
   };
+  const canKeepDraft = !readOnly && !["file", "photo"].includes(initialKind);
+  async function closeWith(choice: CloseChoice) {
+    if (choice === "continue") {
+      setDiscard(false);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await completeEditorClose(choice, {
+        flush: draftState.flush,
+        discard: draftState.discard,
+        close: onClose,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "关闭失败，当前编辑内容已保留");
+    } finally {
+      setSaving(false);
+    }
+  }
   useEffect(() => {
     if (kind === "task")
-      api<Data>("/api/space?kind=project")
+      api<Data>("/api/space?kind=project&lite=1")
         .then((r) => setProjects(r.items))
         .catch(() => {});
   }, [kind]);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (uploadsRunning) {
+      setError("附件仍在上传，请等待上传结束，或先取消未完成的上传。");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -279,7 +306,7 @@ export default function Editor({
             }
           }}
         >
-          <fieldset className="editor-fields" disabled={!!draftState.candidate}>
+          <fieldset className="editor-fields" disabled={!!draftState.candidate || discard}>
             {item?.kind === "inbox" && !readOnly && (
               <label className="field">
                 整理为
@@ -641,7 +668,11 @@ export default function Editor({
               />
             )}
             {item && !["file", "photo"].includes(kind) && !readOnly && (
-              <Attachments parent={item} disabled={saving} />
+              <Attachments
+                parent={item}
+                disabled={saving || discard}
+                onRunningChange={setUploadsRunning}
+              />
             )}
             {!item && !["file", "photo"].includes(kind) && (
               <p className="field-hint">
@@ -661,7 +692,7 @@ export default function Editor({
                 <button
                   type="button"
                   className="text-button danger-text"
-                  disabled={saving}
+                  disabled={saving || uploadsRunning || discard}
                   onClick={() => setWantTrash(true)}
                 >
                   <Trash2 size={15} /> 移入回收站
@@ -685,7 +716,7 @@ export default function Editor({
                 <button
                   type="submit"
                   className="button primary"
-                  disabled={saving || !!draftState.candidate}
+                  disabled={saving || !!draftState.candidate || discard}
                 >
                   {saving ? <Loader2 size={15} className="spin" /> : <Check size={15} />}保存内容
                 </button>
@@ -719,10 +750,49 @@ export default function Editor({
         </form>
       )}
       {discard && (
-        <div className="inline-confirm">
-          <span>关闭编辑窗口？已保存的草稿会保留；未成功保存到草稿的修改会丢失。</span>
-          <button onClick={onClose}>确认关闭</button>
-          <button onClick={() => setDiscard(false)}>继续编辑</button>
+        <div className="editor-close-panel" role="alertdialog" aria-label="处理未保存的修改">
+          <strong>关闭前，如何处理这次修改？</strong>
+          <p>
+            {canKeepDraft
+              ? "保留草稿后可继续编辑；彻底丢弃会删除这份草稿，正式内容不受影响。"
+              : "关闭后，本次未保存的修改会丢弃，已保存的文件会保留。"}
+          </p>
+          {draftState.failed && (
+            <p role="alert" className="danger-text">
+              草稿未能保存到服务端，请先重试或继续编辑。
+            </p>
+          )}
+          {uploadsRunning && (
+            <p className="danger-text">
+              附件上传未完成。关闭会取消未完成的上传；已成功的附件会保留。
+            </p>
+          )}
+          <div>
+            {canKeepDraft && (
+              <button
+                autoFocus
+                className="button primary"
+                disabled={saving || !draftState.ready}
+                onClick={() => void closeWith("keep")}
+              >
+                保留草稿并关闭
+              </button>
+            )}
+            <button
+              className="button secondary danger-text"
+              disabled={saving || (canKeepDraft && !draftState.ready)}
+              onClick={() => (canKeepDraft ? void closeWith("discard") : onClose())}
+            >
+              {canKeepDraft ? "彻底丢弃" : "关闭并丢弃修改"}
+            </button>
+            <button
+              className="button secondary"
+              disabled={saving}
+              onClick={() => void closeWith("continue")}
+            >
+              继续编辑
+            </button>
+          </div>
         </div>
       )}
     </Modal>

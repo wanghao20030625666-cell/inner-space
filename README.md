@@ -1,6 +1,6 @@
 # 隐序 · 私人空间
 
-一个供个人使用的记录与资料工作台。笔记、待办、项目、日历、网页和附件放在同一个可检索的空间，内容按登录账户独立保存。当前版本为 0.4.0；重点补齐草稿、附件、完整查询、备份恢复和维护流程。
+一个供个人使用的记录与资料工作台。笔记、待办、项目、日历、网页和附件放在同一个可检索的空间，内容按登录账户独立保存。当前版本为 0.5.0；完善草稿关闭语义、跨窗口设置、专题备份、命令面板和可选回收站保留期。
 
 ## 已实现的功能
 
@@ -48,7 +48,7 @@ npm run build
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0000_far_stryfe.sql
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0001_nebulous_madrox.sql
 node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file drizzle/0002_optimal_tempest.sql
-npm run dev -- --port 5181 --hostname 127.0.0.1
+npm run dev -- --port 5181 --host 127.0.0.1
 ```
 
 打开终端给出的本地地址。开发预览通过 starter 的回环地址模拟登录，显示 `Seedy`，与线上账户及线上数据库隔离。这个模拟登录只用于本地开发，构建产物不包含此登录实现。开发服务只绑定 `127.0.0.1`，不要通过反向代理公开开发预览。
@@ -151,7 +151,7 @@ npm run build
 - HTML CSP 限制资源来源，允许 ChatGPT/OpenAI 自有嵌入页面及 ZIP 使用的本机 Worker，阻止任意第三方嵌入。文件响应单独保持 sandbox。日志记录服务端错误栈，接口仍返回通用错误。
 - `.openai/hosting.json` 是部署身份与绑定声明，不是访问密钥；更新时必须保留。用户记录、附件、开发身份和临时输出均不入库。
 
-完整功能清单和审查处理结果见 `docs/FEATURES.md`、`docs/REVIEW.md` 与第二轮复核 `docs/REVIEW-ROUND-2.md`。
+完整功能清单和审查处理结果见 `docs/FEATURES.md`、`docs/REVIEW.md`、`docs/REVIEW-ROUND-2.md` 和第三轮整改 `docs/REVIEW-ROUND-3-RESOLUTION.md`。
 
 ## 常见问题
 
@@ -172,3 +172,13 @@ npm run build
 - 草稿预览包含完整时间、正式内容和正文对照；基于较旧正式版本的草稿需二次确认。恢复只填入编辑器，正式保存仍检查版本。
 - 主页“那年今日”只显示往年同一天的有效日记；没有匹配记录时不占空卡片。账本趋势补齐连续六个月份，空月按零显示。Markdown 任务列表为只读预览。
 - 数据获取、弹窗和导航分离到 app/hooks/use-space-data.ts、app/components/workspace-dialogs.tsx、workspace-sidebar.tsx。
+
+## 0.5.0 使用补充
+
+- `Ctrl / ⌘ + K` 或顶部命令按钮打开搜索与命令，支持跨模块查找、切换模块、进入专题和新建内容，使用方向键与 Enter 操作。记录搜索默认排除归档和回收站。
+- 关闭有修改的文字编辑器时，明确选择“保留草稿并关闭 / 彻底丢弃 / 继续编辑”。保留失败不会关闭；丢弃先停止自动保存并等待正在进行的请求，再按版本删除草稿，失败时保留编辑窗口。关闭时若还有附件上传，会明确提示取消未完成部分；保存内容前需等待或取消上传。
+- 设置表单会同步未修改的后台偏好；已有修改时提示冲突，可载入最新设置或只合并本窗口改过的字段。保存带基准值并执行数据库条件更新，防止另一窗口的新设置被覆盖；“检查最新设置”不会重建表单。
+- 专题页可导出 JSON 或附件 ZIP。导出包含正常、归档、回收站记录及关联附件，只归档该专题记录的历史和操作日志，不带整个账户的设置或其他专题。既有 ZIP 大小、哈希和导入校验继续适用；跨专题项目引用在恢复时仅映射包内目标。
+- 回收站保留期默认“永不自动清理”；可选择 30 / 90 天，开启前还需勾选不可恢复提示。保存内容时惰性清理到期项，每次最多 20 条，旧记录的恢复先执行。没有新增后台任务。关闭保留期后停止后续自动清理；已彻底删除的内容不能找回。请在开启前自行备份。
+- 依赖已升级到修复高危通告的兼容版本，CI 增加 `npm audit --audit-level=high`。本次生产依赖审计为 0，高危/严重通告为 0；开发工具链仍有 24 项中危通告，详见第三轮整改记录，不使用 `--force` 降级框架或隐藏告警。
+- 构建配置声明关闭 `workers.dev` / 预览域名，Worker 对直接 `workers.dev` URL 或 Host 返回 403。平台身份头仍依赖可信网关，应用侧防线不能代替托管平台对全部入口和头清洗策略的证明。

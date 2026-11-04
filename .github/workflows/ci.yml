@@ -16,6 +16,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm run install:ci
+      - run: npm audit --audit-level=high
       - run: npm run format:check
       - run: npm run typecheck
       - run: npm run lint
@@ -28,7 +29,7 @@ jobs:
           done
       - name: Integration tests
         run: |
-          npm run dev -- --port 5181 --hostname 127.0.0.1 > /tmp/inner-space-preview.log 2>&1 &
+          npm run dev -- --port 5181 --host 127.0.0.1 > /tmp/inner-space-preview.log 2>&1 &
           preview_pid=$!
           trap 'kill "$preview_pid" || true' EXIT
           node scripts/wait-preview.mjs

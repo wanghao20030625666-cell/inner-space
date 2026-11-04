@@ -21,12 +21,13 @@ async function hash(bytes: Uint8Array) {
     .map((n) => n.toString(16).padStart(2, "0"))
     .join("");
 }
-async function archiveRows(history: boolean) {
+async function archiveRows(history: boolean, collectionId?: string) {
   const rows: unknown[] = [];
   let cursor: string | null = null,
     size = 0;
   do {
     const p = new URLSearchParams({ history: history ? "1" : "0" });
+    if (collectionId) p.set("collection", collectionId);
     if (cursor) p.set("cursor", cursor);
     const result: { rows: unknown[]; nextCursor: string | null } = await api(`/api/activity?${p}`);
     size += strToU8(JSON.stringify(result.rows)).length;
@@ -39,25 +40,38 @@ async function archiveRows(history: boolean) {
 }
 
 /** Export current/trash records and checked attachment bytes; history stays archival. */
-export async function exportBackup(withFiles: boolean, progress: (s: string) => void) {
-  progress("正在读取全部记录");
+export async function buildBackup(
+  withFiles: boolean,
+  progress: (s: string) => void,
+  collection?: Collection,
+) {
+  progress(collection ? "正在读取专题记录与关联附件" : "正在读取全部记录");
+  const filter: Record<string, string> = collection
+    ? { collection: collection.id, includeAttachments: "1" }
+    : {};
   const records = [
-      ...(await allRecords()),
-      ...(await allRecords(new URLSearchParams({ scope: "trash" }))),
+      ...(await allRecords(new URLSearchParams({ scope: "all", ...filter }))),
+      ...(await allRecords(new URLSearchParams({ scope: "trash", ...filter }))),
     ],
-    data = await api<Data>("/api/space");
+    data = collection ? null : await api<Data>("/api/space");
+  const prefix = collection
+    ? `隐序-专题-${collection.name.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").slice(0, 40)}`
+    : "隐序";
   const backup: Backup & { exportedAt: string } = {
     format: withFiles ? "inner-space-v3" : "inner-space-v2",
     exportedAt: new Date().toISOString(),
     records,
-    collections: data.collections,
-    preferences: data.preferences,
+    collections: collection ? [collection] : data!.collections,
+    ...(data ? { preferences: data.preferences } : {}),
   };
   if (strToU8(JSON.stringify(backup)).length > 10 * 1024 * 1024)
     throw new Error("记录清单超过 10 MB，请先按模块导出内容并分批整理备份");
   if (!withFiles) {
-    download(JSON.stringify(backup), `隐序-记录备份-${localDate()}.json`, "application/json");
-    return;
+    return {
+      value: JSON.stringify(backup),
+      filename: `${prefix}-记录备份-${localDate()}.json`,
+      type: "application/json",
+    };
   }
   const files = records.filter((r) => ["file", "photo"].includes(r.kind)),
     entries: Zippable = {},
@@ -80,8 +94,8 @@ export async function exportBackup(withFiles: boolean, progress: (s: string) => 
   backup.files = manifest;
   entries["backup.json"] = strToU8(JSON.stringify(backup));
   progress("正在归档历史与操作记录");
-  entries["history.json"] = strToU8(JSON.stringify(await archiveRows(true)));
-  entries["activity.json"] = strToU8(JSON.stringify(await archiveRows(false)));
+  entries["history.json"] = strToU8(JSON.stringify(await archiveRows(true, collection?.id)));
+  entries["activity.json"] = strToU8(JSON.stringify(await archiveRows(false, collection?.id)));
   entries["说明.txt"] = strToU8(
     "隐序记录与附件备份。导入恢复记录、专题、项目关联及附件；历史版本和操作记录作为归档文件保留，不回写。导入会新增副本，不覆盖现有记录。\n",
   );
@@ -89,7 +103,20 @@ export async function exportBackup(withFiles: boolean, progress: (s: string) => 
   const bytes = await new Promise<Uint8Array>((resolve, reject) =>
     zip(entries, { level: 1 }, (error, value) => (error ? reject(error) : resolve(value))),
   );
-  download(new Uint8Array(bytes).buffer, `隐序-带附件备份-${localDate()}.zip`, "application/zip");
+  return {
+    value: new Uint8Array(bytes).buffer,
+    filename: `${prefix}-带附件备份-${localDate()}.zip`,
+    type: "application/zip",
+  };
+}
+/** Whole-space and collection downloads use the same bounded archive/hash pipeline. */
+export async function exportBackup(
+  withFiles: boolean,
+  progress: (s: string) => void,
+  collection?: Collection,
+) {
+  const result = await buildBackup(withFiles, progress, collection);
+  download(result.value, result.filename, result.type);
 }
 
 /** Validate every record and byte hash before the first write, including ZIP size bounds. */

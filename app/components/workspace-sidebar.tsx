@@ -1,7 +1,7 @@
 "use client";
 import { Plus, ChevronRight, Settings2, UserRound } from "lucide-react";
 import { modules, extraModules, type Module } from "../lib/catalog";
-import type { Data } from "../lib/client";
+import { countByView, type Data } from "../lib/client";
 import type { View } from "../lib/model";
 /** Navigation owns no record mutation state; route and collection choices stay explicit. */
 export default function WorkspaceSidebar({
@@ -21,17 +21,7 @@ export default function WorkspaceSidebar({
   navigate: (view: View, collection?: string) => void;
   addCollection: () => void;
 }) {
-  const count = (v: View) =>
-    data.counts
-      .filter((c) =>
-        v === "trash"
-          ? !!c.deleted
-          : !c.deleted &&
-            (v === "archive"
-              ? c.status === "archived"
-              : c.status !== "archived" && (v === "favorites" ? !!c.favorite : c.kind === v)),
-      )
-      .reduce((sum, c) => sum + c.count, 0);
+  const count = (v: View) => countByView(data.counts, v);
   return (
     <>
       <aside className={`sidebar ${sidebar ? "open" : ""}`}>

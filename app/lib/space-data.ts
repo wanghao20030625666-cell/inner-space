@@ -64,7 +64,6 @@ export function canPatchRecord(
   p: URLSearchParams,
   before: SpaceRecord | undefined,
   after: SpaceRecord,
-  nextCursor: string | null,
 ) {
   if (!p.has("kind")) return false;
   if (!before || before.id !== after.id || before.kind !== after.kind) return false;
@@ -101,7 +100,6 @@ export function canPatchRecord(
           : [];
   if (checked.some((key) => before.meta[key] !== after.meta[key])) return false;
   if (p.get("sort") === "title" && before.title !== after.title) return false;
-  if (nextCursor && p.get("sort") === "due" && before.dueAt !== after.dueAt) return false;
   return true;
 }
 /** Replace every known projection; dates use the same ISO ordering as the API. */

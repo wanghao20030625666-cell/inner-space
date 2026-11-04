@@ -7,6 +7,12 @@ export async function GET(request: Request) {
       history = p.get("history") === "1",
       values: string[] = [owner],
       where = ["owner = ?"];
+    if (p.get("collection")) {
+      where.push(
+        "record_id IN (SELECT id FROM records WHERE owner = ? AND (collection_id = ? OR (kind IN ('file','photo') AND EXISTS (SELECT 1 FROM records parent WHERE parent.id = json_extract(records.meta,'$.parentId') AND parent.owner = ? AND parent.collection_id = ?))))",
+      );
+      values.push(owner, p.get("collection")!, owner, p.get("collection")!);
+    }
     if (p.get("q") && !history) {
       where.push("(instr(lower(title),lower(?)) > 0 OR instr(action,?) > 0)");
       values.push(p.get("q")!.slice(0, 200), p.get("q")!.slice(0, 200));

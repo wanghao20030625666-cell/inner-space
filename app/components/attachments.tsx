@@ -8,9 +8,11 @@ import type { SpaceRecord } from "../lib/model";
 export default function Attachments({
   parent,
   disabled,
+  onRunningChange,
 }: {
   parent: SpaceRecord;
   disabled: boolean;
+  onRunningChange: (running: boolean) => void;
 }) {
   const [items, setItems] = useState<SpaceRecord[]>([]),
     [busy, setBusy] = useState(false),
@@ -68,7 +70,7 @@ export default function Attachments({
         type="file"
         onChange={(e) => void upload(e.target.files)}
       />
-      <UploadQueue batch={batch} onComplete={load} inline />
+      <UploadQueue batch={batch} onComplete={load} onRunningChange={onRunningChange} inline />
       {error && <p className="form-error">{error}</p>}
       {items.map((r) => (
         <div className="attachment-row" key={r.id}>

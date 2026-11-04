@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { zipSync, strToU8 } from "fflate";
 import { createHash } from "node:crypto";
-import { readBackup } from "../app/lib/backup";
+import { buildBackup, readBackup } from "../app/lib/backup";
 const record = {
   id: "00000000-0000-4000-8000-000000000001",
   kind: "file",
@@ -26,6 +26,46 @@ const backup = (hash = sha256) => ({
   records: [record],
   collections: [],
   files: { [record.id]: { path: "files/sample", sha256: hash } },
+});
+describe("collection backup boundaries", () => {
+  it("builds a hashed attachment archive without exporting account settings or other collections", async () => {
+    const collection = {
+      id: "00000000-0000-4000-8000-000000000010",
+      name: "专题/测试",
+      color: "green",
+      createdAt: "2026-01-01",
+      count: 1,
+    };
+    const requests: string[] = [];
+    const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const path = String(input);
+      requests.push(path);
+      if (path.startsWith("/api/files/")) return new Response(new Uint8Array(bytes).buffer);
+      const p = new URL(path, "https://test.invalid");
+      if (p.pathname === "/api/space") {
+        expect(p.searchParams.get("collection")).toBe(collection.id);
+        expect(p.searchParams.get("includeAttachments")).toBe("1");
+        return Response.json({
+          items: p.searchParams.get("scope") === "trash" ? [] : [record],
+          nextCursor: null,
+        });
+      }
+      expect(p.searchParams.get("collection")).toBe(collection.id);
+      return Response.json({ rows: [], nextCursor: null });
+    });
+    try {
+      const result = await buildBackup(true, () => {}, collection);
+      const prepared = await readBackup(new File([result.value], result.filename));
+      expect(prepared.backup.records.map((r) => r.id)).toEqual([record.id]);
+      expect(prepared.backup.collections?.map((c) => c.id)).toEqual([collection.id]);
+      expect(prepared.backup.preferences).toBeUndefined();
+      expect(prepared.entries[`files/${record.id}`]).toEqual(bytes);
+      expect(requests).not.toContain("/api/space");
+      expect(result.filename).not.toContain("专题/测试");
+    } finally {
+      fetch.mockRestore();
+    }
+  });
 });
 const file = (value: unknown, attachment = bytes) =>
   new File(

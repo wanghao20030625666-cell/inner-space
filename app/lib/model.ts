@@ -51,12 +51,14 @@ export type Preferences = {
   motto: string;
   theme: "light" | "dark";
   weekStartsMonday: boolean;
+  trashRetentionDays: 0 | 30 | 90;
 };
 export const defaultPreferences: Preferences = {
   name: "我的空间",
   motto: "",
   theme: "light",
   weekStartsMonday: true,
+  trashRetentionDays: 0,
 };
 export const recordInput = z
   .object({
@@ -64,7 +66,7 @@ export const recordInput = z
     title: z.string().trim().min(1, "请填写标题").max(160),
     content: z.string().max(100000).default(""),
     tags: z.array(z.string().trim().min(1).max(24)).max(12).default([]),
-    meta: z.record(z.union([z.string().max(20000), z.number().finite()])).default({}),
+    meta: z.record(z.string(), z.union([z.string().max(20000), z.number().finite()])).default({}),
     favorite: z.boolean().default(false),
     status: z.enum(["active", "done", "archived"]).default("active"),
     pinned: z.boolean().default(false),
@@ -184,6 +186,7 @@ export const preferencesInput = z.object({
   motto: z.string().max(120),
   theme: z.enum(["light", "dark"]),
   weekStartsMonday: z.boolean(),
+  trashRetentionDays: z.union([z.literal(0), z.literal(30), z.literal(90)]).default(0),
 });
 /** Remove owner IDs and decode the two JSON columns at the API boundary. */
 export function fromRow(r: Record<string, unknown>): SpaceRecord {

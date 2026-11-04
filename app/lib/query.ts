@@ -48,8 +48,15 @@ export function recordQuery(owner: string, p: URLSearchParams) {
   }
   if (collection === "none") where.push("collection_id IS NULL");
   else if (collection) {
-    where.push("collection_id = ?");
-    values.push(collection);
+    if (p.get("includeAttachments") === "1") {
+      where.push(
+        "(collection_id = ? OR (kind IN ('file','photo') AND EXISTS (SELECT 1 FROM records parent WHERE parent.id = json_extract(records.meta,'$.parentId') AND parent.owner = ? AND parent.collection_id = ?)))",
+      );
+      values.push(collection, owner, collection);
+    } else {
+      where.push("collection_id = ?");
+      values.push(collection);
+    }
   }
   if (p.get("project")) {
     where.push("json_extract(meta,'$.projectId') = ?");

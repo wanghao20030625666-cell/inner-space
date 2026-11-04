@@ -19,6 +19,7 @@ import {
   Star,
   Tag,
   Pencil,
+  Command,
 } from "lucide-react";
 import {
   kinds,
@@ -43,6 +44,8 @@ import { useSpaceData } from "./hooks/use-space-data";
 import { useWorkspaceUi } from "./hooks/use-workspace-ui";
 import WorkspaceDialogs from "./components/workspace-dialogs";
 import WorkspaceSidebar from "./components/workspace-sidebar";
+import CollectionExport from "./components/collection-export";
+import CommandPalette from "./components/command-palette";
 export default function Workspace({
   user,
   initialPreferences,
@@ -50,7 +53,8 @@ export default function Workspace({
   user: { name: string; email: string };
   initialPreferences: Preferences;
 }) {
-  const [view, setView] = useState<View>("overview");
+  const [view, setView] = useState<View>("overview"),
+    [commandOpen, setCommandOpen] = useState(false);
   const [query, setQuery] = useState(""),
     [search, setSearch] = useState(""),
     [tag, setTag] = useState(""),
@@ -187,7 +191,7 @@ export default function Workspace({
       if (document.querySelector('[role="dialog"]')) return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        searchRef.current?.focus();
+        setCommandOpen(true);
       }
       if (e.key === "Escape") {
         setSidebar(false);
@@ -351,12 +355,12 @@ export default function Workspace({
     duplicate: (r: SpaceRecord) => {
       void duplicate(r);
     },
-    photoPreview: (r: SpaceRecord) =>
-      setImageIndex(
-        data.items
-          .filter((x) => x.kind === "photo" && !x.deletedAt)
-          .findIndex((x) => x.id === r.id),
-      ),
+    photoPreview: (r: SpaceRecord) => {
+      const index = data.items
+        .filter((x) => x.kind === "photo" && !x.deletedAt)
+        .findIndex((x) => x.id === r.id);
+      if (index >= 0) setImageIndex(index);
+    },
     mutate: (r: SpaceRecord, changes: Record<string, unknown>) => {
       void mutate(r, changes);
     },
@@ -409,6 +413,14 @@ export default function Workspace({
                 <kbd>Ctrl K</kbd>
               )}
             </div>
+            <button
+              className="icon-button command-trigger"
+              onClick={() => setCommandOpen(true)}
+              aria-label="打开搜索与命令"
+              title="搜索与命令 · Ctrl / ⌘ + K"
+            >
+              <Command size={17} />
+            </button>
             <button
               className="icon-button"
               aria-label="刷新内容"
@@ -466,6 +478,9 @@ export default function Workspace({
                 <p>{activeSearch ? "匹配标题、正文和标签。" : current.description}</p>
               </div>
               <div className="heading-actions">
+                {view === "collection" && selectedCollection && !activeSearch && (
+                  <CollectionExport collection={selectedCollection} notify={setToast} />
+                )}
                 {view === "collection" && selectedCollection && (
                   <button
                     className="button secondary"
@@ -751,13 +766,21 @@ export default function Workspace({
                     <input
                       type="checkbox"
                       aria-label="选择当前页内容"
+                      ref={(el) => {
+                        if (el)
+                          el.indeterminate =
+                            selected.length > 0 &&
+                            !data.items.slice(0, 100).every((r) => selected.includes(r.id));
+                      }}
                       checked={
                         selected.length > 0 &&
                         data.items.slice(0, 100).every((r) => selected.includes(r.id))
                       }
                       onChange={() =>
                         setSelected(
-                          selected.length ? [] : data.items.slice(0, 100).map((r) => r.id),
+                          data.items.slice(0, 100).every((r) => selected.includes(r.id))
+                            ? []
+                            : data.items.slice(0, 100).map((r) => r.id),
                         )
                       }
                     />
@@ -957,6 +980,15 @@ export default function Workspace({
           if (!applyRecord(previous, item)) await refreshCurrent();
         }}
       />
+      {commandOpen && (
+        <CommandPalette
+          collections={data.collections}
+          onClose={() => setCommandOpen(false)}
+          onNavigate={navigate}
+          onCreate={create}
+          onOpen={open}
+        />
+      )}
     </div>
   );
 }

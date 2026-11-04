@@ -14,7 +14,7 @@ import {
   CornerDownLeft,
   NotebookPen,
 } from "lucide-react";
-import { formatDate, formatTime, fileSize, type Data } from "../lib/client";
+import { formatDate, formatTime, fileSize, countByKind, type Data } from "../lib/client";
 import { moduleFor } from "../lib/catalog";
 import { localDate, type Kind, type SpaceRecord, type View, type Collection } from "../lib/model";
 
@@ -44,16 +44,7 @@ export default function Dashboard({
 }: Props) {
   const [capture, setCapture] = useState(""),
     [saving, setSaving] = useState(false);
-  const count = (kind: string, status?: string) =>
-    data.counts
-      .filter(
-        (c) =>
-          !c.deleted &&
-          c.status !== "archived" &&
-          c.kind === kind &&
-          (!status || c.status === status),
-      )
-      .reduce((n, c) => n + c.count, 0);
+  const count = (kind: Kind, status?: string) => countByKind(data.counts, kind, status);
   async function save() {
     if (!capture.trim()) return;
     setSaving(true);
@@ -81,10 +72,7 @@ export default function Dashboard({
               : "今天"}
           </div>
           <h1>我的工作台</h1>
-          {data.preferences.motto &&
-            data.preferences.motto !== "把日常安放好，让想法慢慢生长。" && (
-              <p>{data.preferences.motto}</p>
-            )}
+          {data.preferences.motto && <p>{data.preferences.motto}</p>}
         </div>
         <button className="button secondary" onClick={() => onCreate("journal", today)}>
           <NotebookPen size={16} />

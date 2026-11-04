@@ -33,6 +33,7 @@ export default function TaskBoard({
     onChange(r, { status: stage === "done" ? "done" : "active", meta: { ...r.meta, stage } });
   return (
     <div className="task-board">
+      <p className="board-touch-hint">触屏操作请用卡片上的“开始 / 完成 / 重开”按钮切换状态。</p>
       {columns.map((c) => {
         const rows = items
           .filter((r) => taskStage(r) === c.id)

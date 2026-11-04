@@ -9,10 +9,12 @@ export default function UploadQueue({
   batch,
   onComplete,
   inline = false,
+  onRunningChange,
 }: {
   batch: UploadBatch | null;
   onComplete: () => Promise<void>;
   inline?: boolean;
+  onRunningChange?: (running: boolean) => void;
 }) {
   const [manager] = useState(() => new UploadQueueController()),
     rows = useSyncExternalStore(manager.subscribe, manager.getSnapshot, manager.getSnapshot),
@@ -41,6 +43,10 @@ export default function UploadQueue({
     }
   }, [batch, manager]);
   const running = rows.some((r) => ["queued", "uploading"].includes(r.status));
+  useEffect(() => {
+    onRunningChange?.(running);
+  }, [running, onRunningChange]);
+  useEffect(() => () => onRunningChange?.(false), [onRunningChange]);
   if (!rows.length && !error) return null;
   return (
     <section

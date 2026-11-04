@@ -16,7 +16,7 @@ const input = z.object({
     tags: z.string().max(400),
     dueAt: z.string().max(10),
     status: z.enum(["active", "done", "archived"]),
-    meta: z.record(z.union([z.string().max(20000), z.number().finite()])),
+    meta: z.record(z.string(), z.union([z.string().max(20000), z.number().finite()])),
     favorite: z.boolean(),
     pinned: z.boolean(),
     collectionId: z.string().uuid().nullable(),

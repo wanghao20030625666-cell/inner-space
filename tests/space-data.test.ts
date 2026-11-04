@@ -43,9 +43,9 @@ const record = {
 } as SpaceRecord;
 describe("conservative local edits", () => {
   it("allows plain content edits in an unfiltered module", () =>
-    expect(
-      canPatchRecord(spaceParams(filters), record, { ...record, content: "after" }, null),
-    ).toBe(true));
+    expect(canPatchRecord(spaceParams(filters), record, { ...record, content: "after" })).toBe(
+      true,
+    ));
   it.each([
     { favorite: true },
     { pinned: true },
@@ -55,36 +55,30 @@ describe("conservative local edits", () => {
     { deletedAt: "2026-11-04" },
   ])("refreshes aggregate-affecting fields %j", (changes) =>
     expect(
-      canPatchRecord(spaceParams(filters), record, { ...record, ...changes } as SpaceRecord, null),
+      canPatchRecord(spaceParams(filters), record, { ...record, ...changes } as SpaceRecord),
     ).toBe(false),
   );
   it("does not estimate searched membership", () =>
     expect(
-      canPatchRecord(
-        spaceParams({ ...filters, search: "before" }),
-        record,
-        { ...record, title: "after" },
-        null,
-      ),
+      canPatchRecord(spaceParams({ ...filters, search: "before" }), record, {
+        ...record,
+        title: "after",
+      }),
     ).toBe(false));
   it("refreshes dashboard projections from the server", () =>
     expect(
-      canPatchRecord(
-        spaceParams({ ...filters, view: "overview" }),
-        record,
-        { ...record, content: "after" },
-        null,
-      ),
+      canPatchRecord(spaceParams({ ...filters, view: "overview" }), record, {
+        ...record,
+        content: "after",
+      }),
     ).toBe(false));
   it("refreshes money changes", () => {
     const value = { ...record, kind: "expense", meta: { amount: "1" } } as SpaceRecord;
     expect(
-      canPatchRecord(
-        spaceParams({ ...filters, view: "expense" }),
-        value,
-        { ...value, meta: { amount: "2" } },
-        null,
-      ),
+      canPatchRecord(spaceParams({ ...filters, view: "expense" }), value, {
+        ...value,
+        meta: { amount: "2" },
+      }),
     ).toBe(false);
   });
   it("patches known rows without losing other metadata", () => {

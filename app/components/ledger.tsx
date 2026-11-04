@@ -23,7 +23,11 @@ export default function Ledger({
         {[
           { text: "收入", value: value.incomeCents, positive: true },
           { text: "支出", value: value.expenseCents, positive: false },
-          { text: "结余", value: value.incomeCents - value.expenseCents, positive: false },
+          {
+            text: "结余",
+            value: value.incomeCents - value.expenseCents,
+            positive: value.incomeCents > value.expenseCents,
+          },
         ].map((s) => (
           <div key={s.text}>
             <span>{s.text}</span>

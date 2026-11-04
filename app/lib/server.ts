@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers";
 import { getChatGPTUser } from "../chatgpt-auth";
 import { fromRow, recordInput, type SpaceRecord } from "./model";
 import { ApiError } from "./errors";
+import { normalizePreferences, trashCutoff } from "./preferences";
 export { ApiError } from "./errors";
 export function database() {
   if (!env.DB) throw new ApiError(503, "数据服务暂不可用");
@@ -145,7 +146,104 @@ export async function createRecord(
   ]);
   if (!result[0].results.length)
     throw new ApiError(409, "空间达到 10,000 条内容或 1 GB 附件上限，请备份后整理回收站");
+  await purgeExpiredTrash(owner);
   return item;
+}
+/** Manual and opt-in expiry deletion share a version-guarded transaction and blob outbox. */
+export function permanentDeleteStatements(
+  db: ReturnType<typeof database>,
+  owner: string,
+  item: SpaceRecord,
+  expiry?: { cutoff: string; settingsValue: string },
+) {
+  const now = new Date().toISOString();
+  const guard =
+    "id = ? AND owner = ? AND version = ? AND deleted_at IS NOT NULL" +
+    (expiry
+      ? " AND deleted_at < ? AND EXISTS (SELECT 1 FROM settings WHERE owner = ? AND value = ?)"
+      : "");
+  const values = [
+    item.id,
+    owner,
+    item.version,
+    ...(expiry ? [expiry.cutoff, owner, expiry.settingsValue] : []),
+  ];
+  const statements = [];
+  if (["file", "photo"].includes(item.kind) && item.meta.key === `${owner}/${item.id}`)
+    statements.push(
+      db
+        .prepare(
+          `INSERT INTO blob_cleanup (id, owner, key, created_at) SELECT ?, ?, ?, ? FROM records WHERE ${guard}`,
+        )
+        .bind(crypto.randomUUID(), owner, item.meta.key, now, ...values),
+    );
+  statements.push(
+    db
+      .prepare(
+        `DELETE FROM revisions WHERE owner = ? AND record_id = ? AND EXISTS (SELECT 1 FROM records WHERE ${guard})`,
+      )
+      .bind(owner, item.id, ...values),
+    db
+      .prepare(
+        `DELETE FROM drafts WHERE owner = ? AND key = ? AND EXISTS (SELECT 1 FROM records WHERE ${guard})`,
+      )
+      .bind(owner, item.id, ...values),
+    db
+      .prepare(
+        `INSERT INTO audit (id, owner, action, title, record_id, created_at) SELECT ?, ?, ?, ?, ?, ? FROM records WHERE ${guard}`,
+      )
+      .bind(
+        crypto.randomUUID(),
+        owner,
+        expiry ? "到期清理" : "彻底删除",
+        item.title,
+        item.id,
+        now,
+        ...values,
+      ),
+    db.prepare(`DELETE FROM records WHERE ${guard} RETURNING id`).bind(...values),
+  );
+  return statements;
+}
+/** Bounded lazy cleanup never runs on reads or before a restore; settings are rechecked atomically. */
+export async function purgeExpiredTrash(owner: string) {
+  try {
+    const db = database(),
+      settings = await db
+        .prepare("SELECT value FROM settings WHERE owner = ?")
+        .bind(owner)
+        .first<{ value: string }>();
+    const cutoff = trashCutoff(
+      normalizePreferences(settings ? JSON.parse(settings.value) : null).trashRetentionDays,
+    );
+    if (!cutoff || !settings) return { deleted: 0, pending: 0 };
+    const rows = await db
+      .prepare(
+        "SELECT * FROM records WHERE owner = ? AND deleted_at IS NOT NULL AND deleted_at < ? ORDER BY deleted_at,id LIMIT 20",
+      )
+      .bind(owner, cutoff)
+      .all<Record<string, unknown>>();
+    if (!rows.results.length) return { deleted: 0, pending: 0 };
+    const statements = [],
+      indices = [];
+    for (const row of rows.results) {
+      const part = permanentDeleteStatements(db, owner, fromRow(row), {
+        cutoff,
+        settingsValue: settings.value,
+      });
+      indices.push(statements.length + part.length - 1);
+      statements.push(...part);
+    }
+    const results = await db.batch([...statements, ...retention(db, owner)]);
+    return {
+      deleted: indices.reduce((sum, index) => sum + results[index].results.length, 0),
+      pending: await cleanBlobs(owner),
+    };
+  } catch (e) {
+    // A successful foreground save stays successful; cleanup remains retryable on the next write.
+    console.error("Trash expiry cleanup failed", e instanceof Error ? e.stack : "unknown");
+    return { deleted: 0, pending: 0 };
+  }
 }
 /** Retryable outbox keeps permanent file deletion recoverable across service failures. */
 export async function cleanBlobs(owner: string) {

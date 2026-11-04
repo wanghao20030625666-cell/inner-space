@@ -11,6 +11,8 @@ import {
   ApiError,
   cleanBlobs,
   retention,
+  permanentDeleteStatements,
+  purgeExpiredTrash,
 } from "../../lib/server";
 import { recordQuery } from "../../lib/query";
 import { defaultPreferences, fromRow, isCalendarDate } from "../../lib/model";
@@ -25,9 +27,9 @@ export async function GET(request: Request) {
       : new Date().toISOString().slice(0, 10);
     const query = recordQuery(owner, params),
       { totalWhere, totalValues } = query;
-    // Paging, editor selectors and exports only need two list queries.
+    // General lite lists use two queries; project task lists add one scoped aggregate.
     if (params.get("lite") === "1") {
-      const [rows, total] = await Promise.all([
+      const [rows, total, projectTasks] = await Promise.all([
         db
           .prepare(
             `SELECT *, ${query.sortSql} AS _sort FROM records WHERE ${query.where} ORDER BY ${query.order} LIMIT 201`,
@@ -38,12 +40,21 @@ export async function GET(request: Request) {
           .prepare(`SELECT COUNT(*) AS count FROM records WHERE ${totalWhere}`)
           .bind(...totalValues)
           .first<{ count: number }>(),
+        params.get("project")
+          ? db
+              .prepare(
+                "SELECT json_extract(meta,'$.projectId') AS projectId, COUNT(*) AS total, SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) AS done FROM records WHERE owner = ? AND kind = 'task' AND deleted_at IS NULL AND status != 'archived' AND json_extract(meta,'$.projectId') = ? GROUP BY projectId",
+              )
+              .bind(owner, params.get("project"))
+              .all()
+          : Promise.resolve({ results: [] }),
       ]);
       const items = rows.results.slice(0, 200).map(fromRow),
         last = items.at(-1);
       return json({
         items,
         total: total?.count || 0,
+        projectTasks: projectTasks.results,
         nextCursor:
           rows.results.length > 200 && last
             ? JSON.stringify([last.pinned ? 1 : 0, String(rows.results[199]._sort), last.id])
@@ -323,6 +334,7 @@ export async function PATCH(request: Request) {
       ...retention(db, owner, current.id),
     ]);
     if (!results[1].results.length) throw new ApiError(409, "记录已更新，请刷新后重试");
+    await purgeExpiredTrash(owner);
     return json({ item: fromRow(results[1].results[0] as Record<string, unknown>) });
   } catch (e) {
     return failure(e);
@@ -337,42 +349,10 @@ export async function DELETE(request: Request) {
     const item = await ownedRecord(owner, data.id);
     if (!item.deletedAt) throw new ApiError(400, "仅能彻底删除回收站中的记录");
     if (item.version !== data.version) throw new ApiError(409, "记录已更新，请刷新后重试");
-    const db = database(),
-      now = new Date().toISOString(),
-      queries = [];
-    // Store a retryable deletion key inside the same transaction as record removal.
-    if (["file", "photo"].includes(item.kind) && item.meta.key === `${owner}/${item.id}`)
-      queries.push(
-        db
-          .prepare(
-            "INSERT INTO blob_cleanup (id, owner, key, created_at) SELECT ?, ?, ?, ? FROM records WHERE id = ? AND owner = ? AND version = ? AND deleted_at IS NOT NULL",
-          )
-          .bind(crypto.randomUUID(), owner, item.meta.key, now, item.id, owner, item.version),
-      );
-    queries.push(
-      db
-        .prepare(
-          "DELETE FROM revisions WHERE owner = ? AND record_id = ? AND EXISTS (SELECT 1 FROM records WHERE id = ? AND owner = ? AND version = ? AND deleted_at IS NOT NULL)",
-        )
-        .bind(owner, item.id, item.id, owner, item.version),
-    );
-    const deleteIndex = queries.length;
-    queries.push(
-      db
-        .prepare(
-          "DELETE FROM records WHERE owner = ? AND id = ? AND version = ? AND deleted_at IS NOT NULL RETURNING id",
-        )
-        .bind(owner, item.id, item.version),
-    );
-    queries.push(
-      db
-        .prepare(
-          "INSERT INTO audit (id, owner, action, title, record_id, created_at) SELECT ?, ?, '彻底删除', ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM records WHERE owner = ? AND id = ?)",
-        )
-        .bind(crypto.randomUUID(), owner, item.title, item.id, now, owner, item.id),
-    );
-    const result = await db.batch(queries);
-    if (!result[deleteIndex].results.length) throw new ApiError(409, "记录已变化，请刷新后重试");
+    const statements = permanentDeleteStatements(database(), owner, item);
+    const result = await database().batch(statements);
+    if (!result[statements.length - 1].results.length)
+      throw new ApiError(409, "记录已变化，请刷新后重试");
     return json({ ok: true, cleanupPending: await cleanBlobs(owner) });
   } catch (e) {
     return failure(e);
