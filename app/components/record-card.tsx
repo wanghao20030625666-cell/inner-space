@@ -1,0 +1,16 @@
+"use client";
+import { Star, Trash2, ArrowUpRight, Clock3, ExternalLink, RotateCcw, CheckCircle2 } from "lucide-react";
+import { moduleFor } from "../lib/catalog";
+import { fileSize, formatDate } from "../lib/client";
+import { safeLink, type SpaceRecord } from "../lib/model";
+export default function RecordCard({ item: r, list, busy, onOpen, onFavorite, onToggle, onRestore, onDelete }: { item: SpaceRecord; list: boolean; busy: boolean; onOpen: () => void; onFavorite: () => void; onToggle: () => void; onRestore: () => void; onDelete: () => void }) {
+  const m = moduleFor(r.kind), Icon = m.icon;
+  return <article className={`record-card ${list ? "list-card" : ""} ${r.status === "done" ? "completed" : ""}`}>
+    {r.kind === "photo" && !r.deletedAt && !list && <button className="photo-cover" onClick={onOpen}><img src={`/api/files/${r.id}`} alt={r.title} loading="lazy" /></button>}
+    <div className="record-top"><span className={`icon-tile ${m.color}`}><Icon size={19} /></span><span className="record-kind">{m.name}</span>{!r.deletedAt && <button className={`icon-button star-button ${r.favorite ? "starred" : ""}`} onClick={onFavorite} disabled={busy} aria-label={r.favorite ? "取消星标" : "添加星标"}><Star size={16} fill={r.favorite ? "currentColor" : "none"} /></button>}</div>
+    <button className="record-body" onClick={onOpen}><h3>{r.title}</h3>{r.kind === "expense" ? <div className={`expense-amount ${r.meta.direction === "in" ? "positive" : ""}`}>{r.meta.direction === "in" ? "+" : "−"} ¥ {Number(r.meta.amount || 0).toFixed(2)}<small>{String(r.meta.category || "日常")}</small></div> : <p>{r.content.replace(/[#*`>]/g, "").slice(0, 130) || (r.kind === "bookmark" ? String(r.meta.url || "") : r.kind === "file" || r.kind === "photo" ? fileSize(r.meta.size) : r.kind === "contact" ? [r.meta.company, r.meta.phone, r.meta.email].filter(Boolean).join(" · ") || "添加联系信息" : "点击查看或补充内容")}</p>}{r.kind === "project" && <div className="project-progress"><span><i style={{ width: `${Math.max(0, Math.min(100, Number(r.meta.progress || 0)))}%` }} /></span><small>{Number(r.meta.progress || 0)}%</small></div>}</button>
+    <div className="record-tags">{r.tags.slice(0, 3).map(t => <span key={t}>{t}</span>)}{r.status === "archived" && <span>已归档</span>}{r.kind === "task" && r.meta.priority === "high" && <span className="priority-tag">高优先级</span>}</div>
+    <div className="record-footer"><span><Clock3 size={12} />{r.dueAt ? formatDate(r.dueAt) : formatDate(r.updatedAt)}</span>{r.deletedAt ? <div className="record-actions"><button onClick={onRestore} disabled={busy} aria-label="恢复内容"><RotateCcw size={15} /></button><button className="delete-action" onClick={onDelete} disabled={busy} aria-label="彻底删除"><Trash2 size={15} /></button></div> : r.kind === "task" ? <button className={`task-status ${r.status === "done" ? "done" : ""}`} onClick={onToggle} disabled={busy}>{r.status === "done" ? <CheckCircle2 size={14} /> : <span />}{r.status === "done" ? "已完成" : "标记完成"}</button> : r.kind === "bookmark" && safeLink(r.meta.url) ? <a href={safeLink(r.meta.url)} target="_blank" rel="noopener noreferrer" aria-label="打开收藏网页"><ExternalLink size={15} /></a> : <button onClick={onOpen} aria-label="打开内容"><ArrowUpRight size={16} /></button>}</div>
+  </article>;
+}
+

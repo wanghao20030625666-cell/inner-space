@@ -1,0 +1,14 @@
+"use client";
+import { useState } from "react";
+import { CalendarDays, Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { localDate, type SpaceRecord } from "../lib/model";
+import { formatDate } from "../lib/client";
+export default function CalendarView({ items, weekStartsMonday, onOpen, onCreate }: { items: SpaceRecord[]; weekStartsMonday: boolean; onOpen: (r: SpaceRecord) => void; onCreate: (date: string) => void }) {
+  const [month, setMonth] = useState(() => new Date()), [selected, setSelected] = useState(localDate());
+  const year = month.getFullYear(), number = month.getMonth(), offset = (new Date(year, number, 1).getDay() + (weekStartsMonday ? 6 : 0)) % 7;
+  const days = Array.from({ length: 42 }, (_, i) => new Date(year, number, i - offset + 1));
+  const weekdays = weekStartsMonday ? ["一", "二", "三", "四", "五", "六", "日"] : ["日", "一", "二", "三", "四", "五", "六"];
+  const selectedItems = items.filter(r => r.dueAt?.slice(0, 10) === selected).sort((a, b) => String(a.meta.time || "").localeCompare(String(b.meta.time || "")));
+  return <div className="calendar-layout"><section className="panel calendar-panel"><div className="calendar-heading"><h2>{year} 年 {number + 1} 月</h2><div><button className="button secondary small" onClick={() => { setMonth(new Date()); setSelected(localDate()); }}>今天</button><button className="icon-button" aria-label="上个月" onClick={() => setMonth(new Date(year, number - 1, 1))}><ChevronLeft size={18} /></button><button className="icon-button" aria-label="下个月" onClick={() => setMonth(new Date(year, number + 1, 1))}><ChevronRight size={18} /></button></div></div><div className="calendar-grid">{weekdays.map(d => <div className="weekday" key={d}>周{d}</div>)}{days.map(day => { const date = localDate(day), events = items.filter(r => r.dueAt?.slice(0, 10) === date); return <button key={date} className={`calendar-day ${day.getMonth() !== number ? "muted" : ""} ${date === selected ? "selected" : ""} ${date === localDate() ? "today" : ""}`} onClick={() => setSelected(date)}><span>{day.getDate()}</span><div>{events.slice(0, 2).map(r => <small key={r.id}>{r.title}</small>)}{events.length > 2 && <small>还有 {events.length - 2} 项</small>}</div></button>; })}</div></section><section className="panel calendar-agenda"><div className="panel-heading"><h2>{formatDate(selected, true)}</h2><button className="icon-button" aria-label="添加当日日程" onClick={() => onCreate(selected)}><Plus size={18} /></button></div>{selectedItems.length ? selectedItems.map(r => <button className="agenda-item" key={r.id} onClick={() => onOpen(r)}><time>{String(r.meta.time || "全天")}</time><strong>{r.title}</strong><p>{String(r.meta.place || r.content.slice(0, 60) || "未添加备注")}</p></button>) : <div className="small-empty"><CalendarDays size={28} /><p>这一天还没有安排</p><button className="text-button" onClick={() => onCreate(selected)}>添加日程 <Plus size={14} /></button></div>}</section></div>;
+}
+
