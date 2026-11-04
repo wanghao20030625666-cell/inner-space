@@ -15,6 +15,13 @@
       "when": 1793765181362,
       "tag": "0001_nebulous_madrox",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793770697785,
+      "tag": "0002_optimal_tempest",
+      "breakpoints": true
     }
   ]
 }

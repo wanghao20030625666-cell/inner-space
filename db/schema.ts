@@ -1,28 +1,85 @@
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 // The stable platform ID scopes all data. Email is only a display attribute.
-export const collections = sqliteTable("collections", {
-  id: text("id").primaryKey(), owner: text("owner").notNull(), name: text("name").notNull(),
-  color: text("color").notNull().default("green"), createdAt: text("created_at").notNull(),
-}, t => [index("collections_owner").on(t.owner, t.createdAt)]);
-export const records = sqliteTable("records", {
-  id: text("id").primaryKey(), owner: text("owner").notNull(), kind: text("kind").notNull(),
-  title: text("title").notNull(), content: text("content").notNull().default(""),
-  tags: text("tags").notNull().default("[]"), meta: text("meta").notNull().default("{}"),
-  favorite: integer("favorite").notNull().default(0), status: text("status").notNull().default("active"),
-  pinned: integer("pinned").notNull().default(0), collectionId: text("collection_id").references(() => collections.id, { onDelete: "set null" }),
-  dueAt: text("due_at"), createdAt: text("created_at").notNull(), updatedAt: text("updated_at").notNull(),
-  deletedAt: text("deleted_at"), version: integer("version").notNull().default(1),
-}, t => [index("records_owner_updated").on(t.owner, t.updatedAt, t.id), index("records_owner_kind").on(t.owner, t.kind, t.deletedAt)]);
-export const revisions = sqliteTable("revisions", {
-  id: text("id").primaryKey(), owner: text("owner").notNull(), recordId: text("record_id").notNull(),
-  snapshot: text("snapshot").notNull(), createdAt: text("created_at").notNull(),
-}, t => [index("revisions_record").on(t.owner, t.recordId, t.createdAt)]);
-export const audit = sqliteTable("audit", {
-  id: text("id").primaryKey(), owner: text("owner").notNull(), action: text("action").notNull(), title: text("title").notNull(),
-  recordId: text("record_id"), createdAt: text("created_at").notNull(),
-}, t => [index("audit_owner_created").on(t.owner, t.createdAt)]);
-export const settings = sqliteTable("settings", { owner: text("owner").primaryKey(), value: text("value").notNull().default("{}") });
+export const collections = sqliteTable(
+  "collections",
+  {
+    id: text("id").primaryKey(),
+    owner: text("owner").notNull(),
+    name: text("name").notNull(),
+    color: text("color").notNull().default("green"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("collections_owner").on(t.owner, t.createdAt)],
+);
+export const records = sqliteTable(
+  "records",
+  {
+    id: text("id").primaryKey(),
+    owner: text("owner").notNull(),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    content: text("content").notNull().default(""),
+    tags: text("tags").notNull().default("[]"),
+    meta: text("meta").notNull().default("{}"),
+    favorite: integer("favorite").notNull().default(0),
+    status: text("status").notNull().default("active"),
+    pinned: integer("pinned").notNull().default(0),
+    collectionId: text("collection_id").references(() => collections.id, { onDelete: "set null" }),
+    dueAt: text("due_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    deletedAt: text("deleted_at"),
+    version: integer("version").notNull().default(1),
+  },
+  (t) => [
+    index("records_owner_updated").on(t.owner, t.updatedAt, t.id),
+    index("records_owner_kind").on(t.owner, t.kind, t.deletedAt),
+  ],
+);
+export const revisions = sqliteTable(
+  "revisions",
+  {
+    id: text("id").primaryKey(),
+    owner: text("owner").notNull(),
+    recordId: text("record_id").notNull(),
+    snapshot: text("snapshot").notNull(),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("revisions_record").on(t.owner, t.recordId, t.createdAt)],
+);
+export const audit = sqliteTable(
+  "audit",
+  {
+    id: text("id").primaryKey(),
+    owner: text("owner").notNull(),
+    action: text("action").notNull(),
+    title: text("title").notNull(),
+    recordId: text("record_id"),
+    createdAt: text("created_at").notNull(),
+  },
+  (t) => [index("audit_owner_created").on(t.owner, t.createdAt)],
+);
+export const settings = sqliteTable("settings", {
+  owner: text("owner").primaryKey(),
+  value: text("value").notNull().default("{}"),
+});
+// Drafts are separate from published records and share the same owner boundary.
+export const drafts = sqliteTable(
+  "drafts",
+  {
+    id: text("id").primaryKey(),
+    owner: text("owner").notNull(),
+    key: text("key").notNull(),
+    data: text("data").notNull(),
+    version: integer("version").notNull().default(1),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [index("drafts_owner_updated").on(t.owner, t.updatedAt)],
+);
 // Durable outbox: if blob deletion fails, the owner can retry without losing its key.
 export const cleanup = sqliteTable("blob_cleanup", {
-  id: text("id").primaryKey(), owner: text("owner").notNull(), key: text("key").notNull(), createdAt: text("created_at").notNull(),
+  id: text("id").primaryKey(),
+  owner: text("owner").notNull(),
+  key: text("key").notNull(),
+  createdAt: text("created_at").notNull(),
 });

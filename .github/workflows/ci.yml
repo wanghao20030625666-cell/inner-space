@@ -1,0 +1,38 @@
+name: Validate Inner Space
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm run install:ci
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run test:unit
+      - run: npm run build
+      - name: Prepare isolated local D1
+        run: |
+          for migration in drizzle/*.sql; do
+            node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file "$migration"
+          done
+      - name: Integration tests
+        run: |
+          npm run dev -- --port 5181 --hostname 127.0.0.1 > /tmp/inner-space-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" || true' EXIT
+          node scripts/wait-preview.mjs
+          npm run test:integration
+      - name: Preview diagnostics on failure
+        if: failure()
+        run: cat /tmp/inner-space-preview.log 2>/dev/null || true

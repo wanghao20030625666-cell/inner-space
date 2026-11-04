@@ -1,52 +1,731 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Star, Trash2, Check, Download, FileText, History, RotateCcw, Loader2, Pin } from "lucide-react";
+import {
+  Star,
+  Trash2,
+  Check,
+  Download,
+  FileText,
+  History,
+  RotateCcw,
+  Loader2,
+  Pin,
+} from "lucide-react";
 import { moduleFor } from "../lib/catalog";
 import { api, formatTime, type Data } from "../lib/client";
 import { localDate, type Kind, type SpaceRecord, type Collection } from "../lib/model";
 import Modal from "./modal";
 import Markdown from "./markdown";
 import ProjectTasks from "./project-tasks";
-type Draft = { kind: Kind; title: string; content: string; tags: string; dueAt: string; status: SpaceRecord["status"]; meta: SpaceRecord["meta"]; favorite: boolean; pinned: boolean; collectionId: string | null };
-const newDraft = (kind: Kind): Draft => ({ kind, title: "", content: "", tags: "", dueAt: kind === "journal" || kind === "expense" || kind === "event" ? localDate() : "", status: "active", meta: kind === "expense" ? { direction: "out", category: "日常", amount: "" } : kind === "bookmark" ? { readState: "unread" } : {}, favorite: false, pinned: false, collectionId: null });
+import Checklist from "./checklist";
+import Attachments from "./attachments";
+import FilePreview from "./file-preview";
+import { useDraft, type DraftData } from "./draft-state";
+import { exportRecord } from "../lib/exports";
+type Draft = DraftData;
+const newDraft = (kind: Kind): Draft => ({
+  kind,
+  title: "",
+  content: "",
+  tags: "",
+  dueAt: kind === "journal" || kind === "expense" || kind === "event" ? localDate() : "",
+  status: "active",
+  meta:
+    kind === "expense"
+      ? { direction: "out", category: "日常", amount: "" }
+      : kind === "bookmark"
+        ? { readState: "unread" }
+        : {},
+  favorite: false,
+  pinned: false,
+  collectionId: null,
+});
 
-export default function Editor({ kind: initialKind, item, date, collections, collectionId, onClose, onSaved, onTrash }: { kind: Kind; item?: SpaceRecord; date?: string; collections: Collection[]; collectionId: string | null; onClose: () => void; onSaved: () => Promise<void>; onTrash: (r: SpaceRecord) => Promise<void> }) {
-  const [draft, setDraft] = useState<Draft>(() => item ? { kind: item.kind, title: item.title, content: item.content, tags: item.tags.join(", "), dueAt: item.dueAt?.slice(0, 10) || "", status: item.status, meta: { ...item.meta }, favorite: item.favorite, pinned: !!item.pinned, collectionId: item.collectionId || null } : { ...newDraft(initialKind), collectionId, ...(date ? { dueAt: date } : {}) });
+export default function Editor({
+  kind: initialKind,
+  item,
+  date,
+  collections,
+  collectionId,
+  onClose,
+  onSaved,
+  onTrash,
+}: {
+  kind: Kind;
+  item?: SpaceRecord;
+  date?: string;
+  collections: Collection[];
+  collectionId: string | null;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+  onTrash: (r: SpaceRecord) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<Draft>(() =>
+    item
+      ? {
+          kind: item.kind,
+          title: item.title,
+          content: item.content,
+          tags: item.tags.join(", "),
+          dueAt: item.dueAt?.slice(0, 10) || "",
+          status: item.status,
+          meta: { ...item.meta },
+          favorite: item.favorite,
+          pinned: !!item.pinned,
+          collectionId: item.collectionId || null,
+        }
+      : { ...newDraft(initialKind), collectionId, ...(date ? { dueAt: date } : {}) },
+  );
   const kind = draft.kind;
-  const initial = useRef(JSON.stringify(draft)), [saving, setSaving] = useState(false), [error, setError] = useState(""), [preview, setPreview] = useState(false), [tab, setTab] = useState<"edit" | "history">("edit");
-  const [versions, setVersions] = useState<{ id: string; createdAt: string; item: SpaceRecord }[] | null>(null), [projects, setProjects] = useState<SpaceRecord[]>([]), [wantTrash, setWantTrash] = useState(false), [discard, setDiscard] = useState(false);
-  const m = moduleFor(kind), readOnly = !!item?.deletedAt;
-  const field = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft(d => ({ ...d, [key]: value }));
-  const meta = (key: string, value: string | number) => setDraft(d => ({ ...d, meta: { ...d.meta, [key]: value } }));
-  const close = () => { if (!saving) { if (!readOnly && JSON.stringify(draft) !== initial.current) setDiscard(true); else onClose(); } };
-  useEffect(() => { if (kind === "task") api<Data>("/api/space?kind=project").then(r => setProjects(r.items)).catch(() => {}); }, [kind]);
-  const submit = async (e: FormEvent) => {
-    e.preventDefault(); setSaving(true); setError("");
-    try { const payload = { ...draft, tags: [...new Set(draft.tags.split(/[,，]/).map(s => s.trim()).filter(Boolean))], dueAt: draft.dueAt || null, ...(item ? { id: item.id, version: item.version, ...(kind !== item.kind ? { action: "convert" } : {}) } : {}) }; await api("/api/space", { method: item ? "PATCH" : "POST", body: JSON.stringify(payload) }); await onSaved(); }
-    catch (e) { setError(e instanceof Error ? e.message : "保存失败"); } finally { setSaving(false); }
+  const initial = useRef(JSON.stringify(draft)),
+    [saving, setSaving] = useState(false),
+    [error, setError] = useState(""),
+    [preview, setPreview] = useState(false),
+    [tab, setTab] = useState<"edit" | "history">("edit");
+  const [versions, setVersions] = useState<
+      { id: string; createdAt: string; item: SpaceRecord }[] | null
+    >(null),
+    [projects, setProjects] = useState<SpaceRecord[]>([]),
+    [wantTrash, setWantTrash] = useState(false),
+    [discard, setDiscard] = useState(false);
+  const m = moduleFor(kind),
+    readOnly = !!item?.deletedAt;
+  const draftState = useDraft(
+    item?.id || `new-${initialKind}`,
+    draft,
+    readOnly || ["file", "photo"].includes(initialKind),
+    setDraft,
+  );
+  const field = <K extends keyof Draft>(key: K, value: Draft[K]) =>
+    setDraft((d) => ({ ...d, [key]: value }));
+  const meta = (key: string, value: string | number) =>
+    setDraft((d) => ({ ...d, meta: { ...d.meta, [key]: value } }));
+  const close = () => {
+    if (!saving) {
+      if (!readOnly && JSON.stringify(draft) !== initial.current)
+        void draftState.flush().then(() => setDiscard(true));
+      else onClose();
+    }
   };
-  const loadHistory = async () => { setTab("history"); setError(""); try { const result = await api<{ versions: { id: string; createdAt: string; item: SpaceRecord }[] }>(`/api/versions?id=${item!.id}`); setVersions(result.versions); } catch (e) { setError(e instanceof Error ? e.message : "历史版本加载失败"); } };
-  return <Modal title={readOnly ? "查看回收站内容" : item ? `编辑${m.name}` : `新建${kind === "event" ? "日程" : kind === "expense" ? "收支" : m.name}`} subtitle={item ? `创建于 ${formatTime(item.createdAt)} · 版本 ${item.version}` : "内容保存在当前登录账户下。"} onClose={close} wide>
-    {item && <div className="editor-tabs"><button className={tab === "edit" ? "selected" : ""} onClick={() => setTab("edit")}><FileText size={14} /> 内容</button><button className={tab === "history" ? "selected" : ""} onClick={() => void loadHistory()}><History size={14} /> 历史版本</button></div>}
-    {error && <div className="form-error" role="alert">{error}</div>}
-    {tab === "history" ? <div className="version-list">{versions === null ? <Loader2 size={20} className="spin" /> : versions.length ? versions.map(v => <div className="version-card" key={v.id}><div><strong>版本 v{v.item.version}</strong><time>{formatTime(v.createdAt)}</time></div><h4>{v.item.title}</h4><pre>{v.item.content.slice(0, 700) || "此版本无正文"}</pre>{!readOnly && <button className="button secondary" onClick={() => { setDraft({ kind: item?.kind || v.item.kind, pinned: !!v.item.pinned, collectionId: v.item.collectionId || null, title: v.item.title, content: v.item.content, tags: v.item.tags.join(", "), dueAt: v.item.dueAt?.slice(0, 10) || "", status: v.item.status, meta: v.item.meta, favorite: v.item.favorite }); setTab("edit"); }}><RotateCcw size={14} />载入此版本，保存后生效</button>}</div>) : <div className="small-empty"><History size={27} /><p>还没有历史版本。每次修改都会保留上一版。</p></div>}</div> : <form onSubmit={submit}>
-      <div className="editor-fields">{item?.kind === "inbox" && !readOnly && <label className="field">整理为<select value={kind} onChange={e => { const next = e.target.value as Kind; setDraft(d => ({ ...d, kind: next, dueAt: next === "journal" ? d.dueAt || localDate() : d.dueAt })); }}><option value="inbox">留在收集箱</option><option value="note">笔记</option><option value="task">待办</option><option value="bookmark">网页收藏</option><option value="journal">日记</option></select></label>}<label className="field">{kind === "contact" ? "姓名" : "标题"}<input required maxLength={160} placeholder={kind === "contact" ? "输入姓名" : "输入标题"} value={draft.title} disabled={readOnly || saving} onChange={e => field("title", e.target.value)} /></label>
-        {kind === "photo" && item && !readOnly && <img className="editor-photo" src={`/api/files/${item.id}`} alt={item.title} />}
-        {kind === "bookmark" && <label className="field">网页地址<input type="url" required value={String(draft.meta.url || "")} disabled={readOnly || saving} onChange={e => meta("url", e.target.value)} placeholder="https://" /></label>}
-        {kind === "contact" && <div className="form-grid"><label className="field">电话<input type="tel" value={String(draft.meta.phone || "")} disabled={readOnly || saving} onChange={e => meta("phone", e.target.value)} /></label><label className="field">邮箱<input type="email" value={String(draft.meta.email || "")} disabled={readOnly || saving} onChange={e => meta("email", e.target.value)} /></label><label className="field">公司 / 关系<input value={String(draft.meta.company || "")} disabled={readOnly || saving} onChange={e => meta("company", e.target.value)} /></label></div>}
-        {kind === "expense" && <div className="form-grid"><label className="field">收支方向<select value={String(draft.meta.direction || "out")} disabled={readOnly || saving} onChange={e => meta("direction", e.target.value)}><option value="out">支出</option><option value="in">收入</option></select></label><label className="field">金额（人民币）<input required type="number" min="0.01" max="999999999" step="0.01" value={String(draft.meta.amount ?? "")} disabled={readOnly || saving} onChange={e => meta("amount", e.target.value)} /></label><label className="field">分类<input maxLength={30} value={String(draft.meta.category || "")} disabled={readOnly || saving} placeholder="餐饮、交通、工资…" onChange={e => meta("category", e.target.value)} /></label></div>}
-        <div className="field"><div className="field-heading"><span>{["file", "photo", "contact", "expense", "event"].includes(kind) ? "备注" : "正文"}</span>{["note", "journal", "inbox"].includes(kind) && <button type="button" className="text-button" onClick={() => setPreview(!preview)}>{preview ? "关闭预览" : "分栏预览"}</button>}</div><div className={preview ? "editor-split" : "editor-writing"}><textarea aria-label="正文或备注" rows={kind === "note" || kind === "journal" ? 10 : 5} maxLength={100000} value={draft.content} disabled={readOnly || saving} onChange={e => field("content", e.target.value)} placeholder="正文或备注，支持 Markdown…" />{preview && <div className="markdown-preview"><Markdown text={draft.content} /></div>}</div><div className="editor-word-count">{draft.content.replace(/\s/g, "").length.toLocaleString()} 字</div></div>
-        <div className="form-grid"><label className="field">{kind === "expense" || kind === "journal" ? "记录日期" : kind === "event" ? "日程日期" : "截止 / 关联日期"}<input type="date" required={kind === "event" || kind === "expense" || kind === "journal"} value={draft.dueAt} disabled={readOnly || saving} onInput={e => field("dueAt", e.currentTarget.value)} onChange={e => field("dueAt", e.target.value)} /></label>{kind === "event" && <><label className="field">时间（留空为全天）<input type="time" value={String(draft.meta.time || "")} disabled={readOnly || saving} onInput={e => meta("time", e.currentTarget.value)} onChange={e => meta("time", e.target.value)} /></label><label className="field">地点<input value={String(draft.meta.place || "")} disabled={readOnly || saving} onChange={e => meta("place", e.target.value)} /></label></>}
-          {kind === "task" && <><label className="field">优先级<select value={String(draft.meta.priority || "normal")} disabled={readOnly || saving} onChange={e => meta("priority", e.target.value)}><option value="low">低</option><option value="normal">普通</option><option value="high">高</option></select></label><label className="field">关联项目<select value={String(draft.meta.projectId || "")} disabled={readOnly || saving} onChange={e => meta("projectId", e.target.value)}><option value="">不关联项目</option>{projects.map(p => <option value={p.id} key={p.id}>{p.title}</option>)}</select></label></>}
-          {kind === "project" && <label className="field">手动进度（0–100）<span className="field-hint">未关联待办时使用；有关联待办时按完成数量计算。</span><input type="number" min="0" max="100" value={Number(draft.meta.progress || 0)} disabled={readOnly || saving} onChange={e => meta("progress", Math.max(0, Math.min(100, Number(e.target.value))))} /></label>}
-          <label className="field">状态<select value={draft.status} disabled={readOnly || saving} onChange={e => field("status", e.target.value as SpaceRecord["status"])}><option value="active">{kind === "task" || kind === "project" ? "进行中" : "正常"}</option>{["task", "project", "event"].includes(kind) && <option value="done">已完成</option>}<option value="archived">已归档</option></select></label></div>
-        <label className="field">标签 <span className="field-hint">使用逗号分隔，最多 12 个</span><input value={draft.tags} disabled={readOnly || saving} onChange={e => field("tags", e.target.value)} placeholder="例如：工作, 灵感, 待读" /></label>
-        <label className="field">所属专题<select value={draft.collectionId || ""} disabled={readOnly || saving} onChange={e => field("collectionId", e.target.value || null)}><option value="">未归入专题</option>{collections.map(c => <option value={c.id} key={c.id}>{c.name}</option>)}</select></label>{kind === "bookmark" && <label className="field">阅读状态<select value={String(draft.meta.readState || "unread")} disabled={readOnly || saving} onChange={e => meta("readState", e.target.value)}><option value="unread">待读</option><option value="read">已读</option></select></label>}<div className="editor-options"><label className="checkbox-field"><input type="checkbox" checked={draft.pinned} disabled={readOnly || saving} onChange={e => field("pinned", e.target.checked)} /><Pin size={15} />置顶到主页</label><label className="checkbox-field"><input type="checkbox" checked={draft.favorite} disabled={readOnly || saving} onChange={e => field("favorite", e.target.checked)} /><Star size={15} /> 加入星标内容</label></div>{kind === "project" && item && !readOnly && <ProjectTasks project={item} />}
-      </div>
-      <div className="editor-footer"><div>{item && !readOnly && <button type="button" className="text-button danger-text" disabled={saving} onClick={() => setWantTrash(true)}><Trash2 size={15} /> 移入回收站</button>}{item && ["file", "photo"].includes(kind) && !readOnly && <a className="text-button" href={`/api/files/${item.id}`} download={String(item.meta.filename || item.title)}><Download size={15} /> 下载原文件</a>}</div><div><button type="button" className="button secondary" onClick={close}>关闭</button>{!readOnly && <button type="submit" className="button primary" disabled={saving}>{saving ? <Loader2 size={15} className="spin" /> : <Check size={15} />}保存内容</button>}</div></div>
-      {wantTrash && <div className="inline-confirm"><span>确认移入回收站？之后可以恢复。</span><button type="button" disabled={saving} onClick={async () => { setSaving(true); try { await onTrash(item!); } catch (e) { setError(e instanceof Error ? e.message : "删除失败"); } finally { setSaving(false); } }}>确认移入</button><button type="button" onClick={() => setWantTrash(false)}>取消</button></div>}
-    </form>}
-    {discard && <div className="inline-confirm"><span>有尚未保存的修改，是否放弃？</span><button onClick={onClose}>放弃修改</button><button onClick={() => setDiscard(false)}>继续编辑</button></div>}
-  </Modal>;
+  useEffect(() => {
+    if (kind === "task")
+      api<Data>("/api/space?kind=project")
+        .then((r) => setProjects(r.items))
+        .catch(() => {});
+  }, [kind]);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const payload = {
+        ...draft,
+        tags: [
+          ...new Set(
+            draft.tags
+              .split(/[,，]/)
+              .map((s) => s.trim())
+              .filter(Boolean),
+          ),
+        ],
+        dueAt: draft.dueAt || null,
+        ...(item
+          ? {
+              id: item.id,
+              version: item.version,
+              ...(kind !== item.kind ? { action: "convert" } : {}),
+            }
+          : {}),
+      };
+      await api("/api/space", { method: item ? "PATCH" : "POST", body: JSON.stringify(payload) });
+      await draftState.finish();
+      await onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const loadHistory = async () => {
+    setTab("history");
+    setError("");
+    try {
+      const result = await api<{
+        versions: { id: string; createdAt: string; item: SpaceRecord }[];
+      }>(`/api/versions?id=${item!.id}`);
+      setVersions(result.versions);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "历史版本加载失败");
+    }
+  };
+  return (
+    <Modal
+      title={
+        readOnly
+          ? "查看回收站内容"
+          : item
+            ? `编辑${m.name}`
+            : `新建${kind === "event" ? "日程" : kind === "expense" ? "收支" : m.name}`
+      }
+      subtitle={
+        item
+          ? `创建于 ${formatTime(item.createdAt)} · 版本 ${item.version}`
+          : "内容保存在当前登录账户下。"
+      }
+      onClose={close}
+      wide
+    >
+      {item && (
+        <div className="editor-tabs">
+          <button className={tab === "edit" ? "selected" : ""} onClick={() => setTab("edit")}>
+            <FileText size={14} /> 内容
+          </button>
+          <button
+            className={tab === "history" ? "selected" : ""}
+            onClick={() => void loadHistory()}
+          >
+            <History size={14} /> 历史版本
+          </button>
+        </div>
+      )}
+      {!readOnly && !["file", "photo"].includes(kind) && (
+        <div className={`draft-status ${draftState.failed ? "failed" : ""}`} role="status">
+          <span>{draftState.status}</span>
+          {draftState.failed && (
+            <button type="button" onClick={() => void draftState.flush()}>
+              重试保存草稿
+            </button>
+          )}
+        </div>
+      )}
+      {draftState.candidate && (
+        <div className="draft-recovery">
+          <strong>找到未完成的草稿</strong>
+          <p>
+            {draftState.candidate.data.title || "未填写标题"} ·{" "}
+            {formatTime(draftState.candidate.updatedAt)}
+          </p>
+          <button type="button" className="button primary" onClick={draftState.restore}>
+            恢复草稿
+          </button>
+          <button
+            type="button"
+            className="button secondary"
+            onClick={() => {
+              if (confirm("放弃这份草稿？正式内容会保留。"))
+                void draftState.discard().catch((e) => setError(e.message));
+            }}
+          >
+            放弃草稿
+          </button>
+        </div>
+      )}
+      {error && (
+        <div className="form-error" role="alert">
+          {error}
+        </div>
+      )}
+      {tab === "history" ? (
+        <div className="version-list">
+          {versions === null ? (
+            <Loader2 size={20} className="spin" />
+          ) : versions.length ? (
+            versions.map((v) => (
+              <div className="version-card" key={v.id}>
+                <div>
+                  <strong>版本 v{v.item.version}</strong>
+                  <time>{formatTime(v.createdAt)}</time>
+                </div>
+                <h4>{v.item.title}</h4>
+                <pre>{v.item.content.slice(0, 700) || "此版本无正文"}</pre>
+                {!readOnly && (
+                  <button
+                    className="button secondary"
+                    onClick={() => {
+                      setDraft({
+                        kind: item?.kind || v.item.kind,
+                        pinned: !!v.item.pinned,
+                        collectionId: v.item.collectionId || null,
+                        title: v.item.title,
+                        content: v.item.content,
+                        tags: v.item.tags.join(", "),
+                        dueAt: v.item.dueAt?.slice(0, 10) || "",
+                        status: v.item.status,
+                        meta: v.item.meta,
+                        favorite: v.item.favorite,
+                      });
+                      setTab("edit");
+                    }}
+                  >
+                    <RotateCcw size={14} />
+                    载入此版本，保存后生效
+                  </button>
+                )}
+              </div>
+            ))
+          ) : (
+            <div className="small-empty">
+              <History size={27} />
+              <p>还没有历史版本。每次修改都会保留上一版。</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <form
+          onSubmit={submit}
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.requestSubmit();
+            }
+          }}
+        >
+          <fieldset className="editor-fields" disabled={!!draftState.candidate}>
+            {item?.kind === "inbox" && !readOnly && (
+              <label className="field">
+                整理为
+                <select
+                  value={kind}
+                  onChange={(e) => {
+                    const next = e.target.value as Kind;
+                    setDraft((d) => ({
+                      ...d,
+                      kind: next,
+                      dueAt: next === "journal" ? d.dueAt || localDate() : d.dueAt,
+                    }));
+                  }}
+                >
+                  <option value="inbox">留在收集箱</option>
+                  <option value="note">笔记</option>
+                  <option value="task">待办</option>
+                  <option value="bookmark">网页收藏</option>
+                  <option value="journal">日记</option>
+                </select>
+              </label>
+            )}
+            <label className="field">
+              {kind === "contact" ? "姓名" : "标题"}
+              <input
+                required
+                maxLength={160}
+                placeholder={kind === "contact" ? "输入姓名" : "输入标题"}
+                value={draft.title}
+                disabled={readOnly || saving}
+                onChange={(e) => field("title", e.target.value)}
+              />
+            </label>
+            {["file", "photo"].includes(kind) && item && <FilePreview item={item} />}
+            {kind === "bookmark" && (
+              <label className="field">
+                网页地址
+                <input
+                  type="url"
+                  required
+                  value={String(draft.meta.url || "")}
+                  disabled={readOnly || saving}
+                  onChange={(e) => meta("url", e.target.value)}
+                  placeholder="https://"
+                />
+              </label>
+            )}
+            {kind === "contact" && (
+              <div className="form-grid">
+                <label className="field">
+                  地址
+                  <input
+                    maxLength={300}
+                    value={String(draft.meta.address || "")}
+                    disabled={readOnly || saving}
+                    onChange={(e) => meta("address", e.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  电话
+                  <input
+                    type="tel"
+                    value={String(draft.meta.phone || "")}
+                    disabled={readOnly || saving}
+                    onChange={(e) => meta("phone", e.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  邮箱
+                  <input
+                    type="email"
+                    value={String(draft.meta.email || "")}
+                    disabled={readOnly || saving}
+                    onChange={(e) => meta("email", e.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  公司 / 关系
+                  <input
+                    value={String(draft.meta.company || "")}
+                    disabled={readOnly || saving}
+                    onChange={(e) => meta("company", e.target.value)}
+                  />
+                </label>
+              </div>
+            )}
+            {kind === "expense" && (
+              <div className="form-grid">
+                <label className="field">
+                  收支方向
+                  <select
+                    value={String(draft.meta.direction || "out")}
+                    disabled={readOnly || saving}
+                    onChange={(e) => meta("direction", e.target.value)}
+                  >
+                    <option value="out">支出</option>
+                    <option value="in">收入</option>
+                  </select>
+                </label>
+                <label className="field">
+                  金额（人民币）
+                  <input
+                    required
+                    type="number"
+                    min="0.01"
+                    max="999999999"
+                    step="0.01"
+                    value={String(draft.meta.amount ?? "")}
+                    disabled={readOnly || saving}
+                    onChange={(e) => meta("amount", e.target.value)}
+                  />
+                </label>
+                <label className="field">
+                  分类
+                  <input
+                    maxLength={30}
+                    value={String(draft.meta.category || "")}
+                    disabled={readOnly || saving}
+                    placeholder="餐饮、交通、工资…"
+                    onChange={(e) => meta("category", e.target.value)}
+                  />
+                </label>
+              </div>
+            )}
+            <div className="field">
+              <div className="field-heading">
+                <span>
+                  {["file", "photo", "contact", "expense", "event"].includes(kind)
+                    ? "备注"
+                    : "正文"}
+                </span>
+                {["note", "journal", "inbox"].includes(kind) && (
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={() => setPreview(!preview)}
+                  >
+                    {preview ? "关闭预览" : "分栏预览"}
+                  </button>
+                )}
+              </div>
+              <div className={preview ? "editor-split" : "editor-writing"}>
+                <textarea
+                  aria-label="正文或备注"
+                  rows={kind === "note" || kind === "journal" ? 10 : 5}
+                  maxLength={100000}
+                  value={draft.content}
+                  disabled={readOnly || saving}
+                  onChange={(e) => field("content", e.target.value)}
+                  placeholder="正文或备注，支持 Markdown…"
+                />
+                {preview && (
+                  <div className="markdown-preview">
+                    <Markdown text={draft.content} />
+                  </div>
+                )}
+              </div>
+              <div className="editor-word-count">
+                {draft.content.replace(/\s/g, "").length.toLocaleString()} 字
+              </div>
+            </div>
+            <div className="form-grid">
+              <label className="field">
+                {kind === "expense" || kind === "journal"
+                  ? "记录日期"
+                  : kind === "event"
+                    ? "日程日期"
+                    : "截止 / 关联日期"}
+                <input
+                  type="date"
+                  required={kind === "event" || kind === "expense" || kind === "journal"}
+                  value={draft.dueAt}
+                  disabled={readOnly || saving}
+                  onInput={(e) => field("dueAt", e.currentTarget.value)}
+                  onChange={(e) => field("dueAt", e.target.value)}
+                />
+              </label>
+              {kind === "event" && (
+                <>
+                  <label className="field">
+                    时间（留空为全天）
+                    <input
+                      type="time"
+                      value={String(draft.meta.time || "")}
+                      disabled={readOnly || saving}
+                      onInput={(e) => meta("time", e.currentTarget.value)}
+                      onChange={(e) => meta("time", e.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    结束时间
+                    <input
+                      type="time"
+                      value={String(draft.meta.endTime || "")}
+                      disabled={readOnly || saving}
+                      onChange={(e) => meta("endTime", e.target.value)}
+                    />
+                  </label>
+                  <label className="field">
+                    地点
+                    <input
+                      value={String(draft.meta.place || "")}
+                      disabled={readOnly || saving}
+                      onChange={(e) => meta("place", e.target.value)}
+                    />
+                  </label>
+                </>
+              )}
+              {kind === "task" && (
+                <>
+                  <label className="field">
+                    阶段
+                    <select
+                      value={
+                        draft.status === "done"
+                          ? "done"
+                          : String(draft.meta.stage === "doing" ? "doing" : "todo")
+                      }
+                      disabled={readOnly || saving}
+                      onChange={(e) =>
+                        setDraft((d) => ({
+                          ...d,
+                          status: e.target.value === "done" ? "done" : "active",
+                          meta: { ...d.meta, stage: e.target.value },
+                        }))
+                      }
+                    >
+                      <option value="todo">待开始</option>
+                      <option value="doing">进行中</option>
+                      <option value="done">已完成</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    优先级
+                    <select
+                      value={String(draft.meta.priority || "normal")}
+                      disabled={readOnly || saving}
+                      onChange={(e) => meta("priority", e.target.value)}
+                    >
+                      <option value="low">低</option>
+                      <option value="normal">普通</option>
+                      <option value="high">高</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    关联项目
+                    <select
+                      value={String(draft.meta.projectId || "")}
+                      disabled={readOnly || saving}
+                      onChange={(e) => meta("projectId", e.target.value)}
+                    >
+                      <option value="">不关联项目</option>
+                      {projects.map((p) => (
+                        <option value={p.id} key={p.id}>
+                          {p.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
+              {kind === "project" && (
+                <label className="field">
+                  手动进度（0–100）
+                  <span className="field-hint">未关联待办时使用；有关联待办时按完成数量计算。</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={Number(draft.meta.progress || 0)}
+                    disabled={readOnly || saving}
+                    onChange={(e) =>
+                      meta("progress", Math.max(0, Math.min(100, Number(e.target.value))))
+                    }
+                  />
+                </label>
+              )}
+              <label className="field">
+                状态
+                <select
+                  value={draft.status}
+                  disabled={readOnly || saving}
+                  onChange={(e) => field("status", e.target.value as SpaceRecord["status"])}
+                >
+                  <option value="active">
+                    {kind === "task" || kind === "project" ? "进行中" : "正常"}
+                  </option>
+                  {["task", "project", "event"].includes(kind) && (
+                    <option value="done">已完成</option>
+                  )}
+                  <option value="archived">已归档</option>
+                </select>
+              </label>
+            </div>
+            <label className="field">
+              标签 <span className="field-hint">使用逗号分隔，最多 12 个</span>
+              <input
+                value={draft.tags}
+                disabled={readOnly || saving}
+                onChange={(e) => field("tags", e.target.value)}
+                placeholder="例如：工作, 灵感, 待读"
+              />
+            </label>
+            <label className="field">
+              所属专题
+              <select
+                value={draft.collectionId || ""}
+                disabled={readOnly || saving}
+                onChange={(e) => field("collectionId", e.target.value || null)}
+              >
+                <option value="">未归入专题</option>
+                {collections.map((c) => (
+                  <option value={c.id} key={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {kind === "bookmark" && (
+              <label className="field">
+                阅读状态
+                <select
+                  value={String(draft.meta.readState || "unread")}
+                  disabled={readOnly || saving}
+                  onChange={(e) => meta("readState", e.target.value)}
+                >
+                  <option value="unread">待读</option>
+                  <option value="read">已读</option>
+                </select>
+              </label>
+            )}
+            <div className="editor-options">
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={draft.pinned}
+                  disabled={readOnly || saving}
+                  onChange={(e) => field("pinned", e.target.checked)}
+                />
+                <Pin size={15} />
+                置顶到主页
+              </label>
+              <label className="checkbox-field">
+                <input
+                  type="checkbox"
+                  checked={draft.favorite}
+                  disabled={readOnly || saving}
+                  onChange={(e) => field("favorite", e.target.checked)}
+                />
+                <Star size={15} /> 加入星标内容
+              </label>
+            </div>
+            {kind === "project" && item && !readOnly && <ProjectTasks project={item} />}
+            {kind === "task" && (
+              <Checklist
+                value={draft.meta.checklist}
+                disabled={readOnly || saving}
+                onChange={(v) => meta("checklist", v)}
+              />
+            )}
+            {item && !["file", "photo"].includes(kind) && !readOnly && (
+              <Attachments parent={item} disabled={saving} />
+            )}
+            {!item && !["file", "photo"].includes(kind) && (
+              <p className="field-hint">
+                保存内容后可以添加附件。Markdown 预览支持标题、列表、引用、代码与基础链接。
+              </p>
+            )}
+          </fieldset>
+          <div className="editor-footer">
+            <div>
+              {item && !["file", "photo"].includes(kind) && (
+                <button type="button" className="text-button" onClick={() => exportRecord(item)}>
+                  <Download size={14} />
+                  {kind === "contact" ? "导出名片" : kind === "event" ? "导出日历" : "导出内容"}
+                </button>
+              )}
+              {item && !readOnly && (
+                <button
+                  type="button"
+                  className="text-button danger-text"
+                  disabled={saving}
+                  onClick={() => setWantTrash(true)}
+                >
+                  <Trash2 size={15} /> 移入回收站
+                </button>
+              )}
+              {item && ["file", "photo"].includes(kind) && !readOnly && (
+                <a
+                  className="text-button"
+                  href={`/api/files/${item.id}`}
+                  download={String(item.meta.filename || item.title)}
+                >
+                  <Download size={15} /> 下载原文件
+                </a>
+              )}
+            </div>
+            <div>
+              <button type="button" className="button secondary" onClick={close}>
+                关闭
+              </button>
+              {!readOnly && (
+                <button
+                  type="submit"
+                  className="button primary"
+                  disabled={saving || !!draftState.candidate}
+                >
+                  {saving ? <Loader2 size={15} className="spin" /> : <Check size={15} />}保存内容
+                </button>
+              )}
+            </div>
+          </div>
+          {wantTrash && (
+            <div className="inline-confirm">
+              <span>确认移入回收站？之后可以恢复。</span>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    await onTrash(item!);
+                  } catch (e) {
+                    setError(e instanceof Error ? e.message : "删除失败");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                确认移入
+              </button>
+              <button type="button" onClick={() => setWantTrash(false)}>
+                取消
+              </button>
+            </div>
+          )}
+        </form>
+      )}
+      {discard && (
+        <div className="inline-confirm">
+          <span>关闭编辑窗口？已保存的草稿会保留；未成功保存到草稿的修改会丢失。</span>
+          <button onClick={onClose}>确认关闭</button>
+          <button onClick={() => setDiscard(false)}>继续编辑</button>
+        </div>
+      )}
+    </Modal>
+  );
 }
-

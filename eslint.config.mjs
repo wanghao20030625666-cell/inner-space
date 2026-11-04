@@ -14,13 +14,13 @@ const eslintConfig = defineConfig([
     "work/**",
   ]),
   {
-    files: ["components/ui/**/*.{ts,tsx}", "hooks/use-mobile.ts"],
+    files: ["app/**/*.{ts,tsx}"],
     rules: {
-      // These files are vendored verbatim from shadcn@4.17.0. Keep the
-      // registry source intact while applying the stricter rules to Site code.
-      "@typescript-eslint/no-unused-vars": "off",
-      "react-hooks/purity": "off",
+      // Fetch state and request counters intentionally synchronize from effects.
+      // This project does not enable React Compiler's optional optimization pass.
       "react-hooks/set-state-in-effect": "off",
+      // Authenticated images must go directly through the protected file endpoint.
+      "@next/next/no-img-element": "off",
     },
   },
 ]);

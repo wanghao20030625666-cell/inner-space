@@ -3,7 +3,11 @@ import { runWithConnectorBinding } from "../lib/connector-context";
 import type { ConnectorBinding } from "../lib/connector-contract.mjs";
 
 const worker = {
-  async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>) {
+  async fetch(
+    request: Request,
+    env: Cloudflare.Env,
+    ctx: ExecutionContext<{ CONNECTORS?: ConnectorBinding }>,
+  ) {
     let binding = ctx.props?.CONNECTORS;
     // Local preview emulates the same request-scoped capability. This branch and
     // the auxiliary service binding are absent from production builds.
@@ -17,7 +21,10 @@ const worker = {
         },
         async invoke(connectorId, actionName, args) {
           if (Date.now() >= expiresAt) {
-            return { status: "request_context_expired", message: "This request has expired. Please try again." };
+            return {
+              status: "request_context_expired",
+              message: "This request has expired. Please try again.",
+            };
           }
           return preview.invoke(connectorId, actionName, args);
         },
@@ -26,11 +33,23 @@ const worker = {
     const response = await runWithConnectorBinding(binding, () => handler.fetch(request, env, ctx));
     // Private HTML and JSON must not be reused by shared caches across identities.
     const headers = new Headers(response.headers);
-    if (/text\/html|application\/json/.test(headers.get("Content-Type") || "")) headers.set("Cache-Control", "private, no-store");
+    if (/text\/html|application\/json/.test(headers.get("Content-Type") || ""))
+      headers.set("Cache-Control", "private, no-store");
     headers.set("X-Content-Type-Options", "nosniff");
     headers.set("Referrer-Policy", "no-referrer");
     headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-    return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    if (/text\/html/.test(headers.get("Content-Type") || "")) {
+      // Allow the product's own embedding surfaces, while blocking arbitrary sites.
+      headers.set(
+        "Content-Security-Policy",
+        `default-src 'self'; script-src 'self' 'unsafe-inline'${import.meta.env.DEV ? " 'unsafe-eval'" : ""}; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; connect-src 'self'${import.meta.env.DEV ? " ws:" : ""}; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://chatgpt.com https://*.chatgpt.com https://*.openai.com`,
+      );
+    }
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   },
 };
 

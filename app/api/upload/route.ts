@@ -13,19 +13,56 @@ export async function POST(request: Request) {
   let uploadedKey: string | null = null;
   try {
     const owner = await authorize(request);
-    if (Number(request.headers.get("content-length") || 0) > MAX_BYTES + 100000) throw new ApiError(413, "单个文件不能超过 25 MB");
-    const form = await request.formData(), file = form.get("file"), kind = form.get("kind") === "photo" ? "photo" : "file";
+    if (Number(request.headers.get("content-length") || 0) > MAX_BYTES + 100000)
+      throw new ApiError(413, "单个文件不能超过 25 MB");
+    const form = await request.formData(),
+      file = form.get("file"),
+      kind = form.get("kind") === "photo" ? "photo" : "file";
     if (!(file instanceof File) || !file.size) throw new ApiError(400, "请选择有效文件");
     if (file.size > MAX_BYTES) throw new ApiError(413, "单个文件不能超过 25 MB");
-    const bytes = new Uint8Array(await file.arrayBuffer()), mime = imageType(bytes);
+    const bytes = new Uint8Array(await file.arrayBuffer()),
+      mime = imageType(bytes);
     if (kind === "photo" && !mime) throw new ApiError(400, "相册支持 JPG、PNG、GIF 和 WebP 图片");
-    const id = crypto.randomUUID(), key = `${owner}/${id}`;
-    await bucket().put(key, bytes, { httpMetadata: { contentType: mime || "application/octet-stream" } }); uploadedKey = key;
-    const collectionId = typeof form.get("collectionId") === "string" ? String(form.get("collectionId")) : null;
-    const item = await createRecord(owner, { kind, title: file.name.slice(0, 160), content: "", tags: [], favorite: false, pinned: false, collectionId: collectionId || null, status: "active", dueAt: null, meta: { key, size: file.size, mime: mime || "application/octet-stream", filename: file.name.slice(0, 200) } }, id);
+    const id = crypto.randomUUID(),
+      key = `${owner}/${id}`;
+    await bucket().put(key, bytes, {
+      httpMetadata: { contentType: mime || "application/octet-stream" },
+    });
+    uploadedKey = key;
+    const collectionId =
+        typeof form.get("collectionId") === "string" ? String(form.get("collectionId")) : null,
+      parentId = typeof form.get("parentId") === "string" ? String(form.get("parentId")) : "";
+    const item = await createRecord(
+      owner,
+      {
+        kind,
+        title: file.name.slice(0, 160),
+        content: "",
+        tags: [],
+        favorite: false,
+        pinned: false,
+        collectionId: collectionId || null,
+        status: "active",
+        dueAt: null,
+        meta: {
+          key,
+          size: file.size,
+          mime: mime || "application/octet-stream",
+          filename: file.name.slice(0, 200),
+          ...(parentId ? { parentId } : {}),
+        },
+      },
+      id,
+    );
     return json({ item }, 201);
   } catch (e) {
-    if (uploadedKey) { try { await bucket().delete(uploadedKey); } catch { /* Preserve the original error. */ } }
+    if (uploadedKey) {
+      try {
+        await bucket().delete(uploadedKey);
+      } catch {
+        /* Preserve the original error. */
+      }
+    }
     return failure(e);
   }
 }
