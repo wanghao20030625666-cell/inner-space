@@ -9,10 +9,12 @@ export default function Attachments({
   parent,
   disabled,
   onRunningChange,
+  onChanged,
 }: {
   parent: SpaceRecord;
   disabled: boolean;
   onRunningChange: (running: boolean) => void;
+  onChanged: () => void;
 }) {
   const [items, setItems] = useState<SpaceRecord[]>([]),
     [busy, setBusy] = useState(false),
@@ -70,7 +72,15 @@ export default function Attachments({
         type="file"
         onChange={(e) => void upload(e.target.files)}
       />
-      <UploadQueue batch={batch} onComplete={load} onRunningChange={onRunningChange} inline />
+      <UploadQueue
+        batch={batch}
+        onComplete={async () => {
+          onChanged();
+          await load();
+        }}
+        onRunningChange={onRunningChange}
+        inline
+      />
       {error && <p className="form-error">{error}</p>}
       {items.map((r) => (
         <div className="attachment-row" key={r.id}>
@@ -97,6 +107,7 @@ export default function Attachments({
                   method: "PATCH",
                   body: JSON.stringify({ id: r.id, version: r.version, meta: { parentId: "" } }),
                 });
+                onChanged();
                 await load();
               } catch (e) {
                 setError(e instanceof Error ? e.message : "操作失败");

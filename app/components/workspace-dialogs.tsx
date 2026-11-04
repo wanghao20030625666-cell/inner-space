@@ -121,14 +121,15 @@ export default function WorkspaceDialogs({
             draftKey={editor.draftKey}
             collections={data.collections}
             collectionId={collectionId === "none" ? null : collectionId || null}
-            onClose={() => {
+            onClose={(refresh) => {
               setEditor(null);
-              if (editor.kind === "project") void refreshCurrent();
+              if (refresh || editor.kind === "project") void refreshCurrent();
             }}
-            onSaved={async (item, notice) => {
+            onSaved={async (item, notice, refresh) => {
               const previous = editor.item;
               setEditor(null);
-              await onRecordSaved(previous, item);
+              if (refresh || editor.kind === "project") await refreshCurrent();
+              else await onRecordSaved(previous, item);
               setToast(notice || "已保存");
             }}
             onTrash={async (item) => {

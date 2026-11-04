@@ -65,8 +65,8 @@ export default function Editor({
   draftKey?: string;
   collections: Collection[];
   collectionId: string | null;
-  onClose: () => void;
-  onSaved: (item: SpaceRecord, notice?: string | null) => Promise<void>;
+  onClose: (refresh?: boolean) => void;
+  onSaved: (item: SpaceRecord, notice?: string | null, refresh?: boolean) => Promise<void>;
   onTrash: (r: SpaceRecord) => Promise<void>;
 }) {
   const [empty] = useState<Draft>(() => ({
@@ -116,6 +116,8 @@ export default function Editor({
     [pasteRunning, setPasteRunning] = useState(false),
     [pasteBatch, setPasteBatch] = useState<UploadBatch | null>(null);
   const uploadsRunning = attachmentRunning || pasteRunning;
+  // Uploads affect album counts and storage even if the text itself is later discarded.
+  const hadUploads = useRef(false);
   const m = moduleFor(kind),
     readOnly = !!item?.deletedAt;
   const draftState = useDraft(
@@ -148,6 +150,7 @@ export default function Editor({
     });
   }
   function insertImage(image: SpaceRecord) {
+    hadUploads.current = true;
     const markdown = imageMarkdown(image.id, image.title);
     const next = contentRef.current + (contentRef.current ? "\n\n" : "") + markdown;
     if (next.length > 100000) {
@@ -167,7 +170,7 @@ export default function Editor({
       if (discard) setDiscard(false);
       else if ((!readOnly && JSON.stringify(draft) !== initial.current) || uploadsRunning)
         setDiscard(true);
-      else onClose();
+      else onClose(hadUploads.current || uploadsRunning);
     }
   };
   const canKeepDraft = !readOnly && !["file", "photo"].includes(initialKind);
@@ -182,7 +185,7 @@ export default function Editor({
       await completeEditorClose(choice, {
         flush: draftState.flush,
         discard: draftState.discard,
-        close: onClose,
+        close: () => onClose(hadUploads.current || uploadsRunning),
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "关闭失败，当前编辑内容已保留");
@@ -229,7 +232,7 @@ export default function Editor({
         body: JSON.stringify(payload),
       });
       const notice = await draftState.finish();
-      await onSaved(result.item, notice);
+      await onSaved(result.item, notice, hadUploads.current);
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存失败");
     } finally {
@@ -769,6 +772,9 @@ export default function Editor({
                 parent={item}
                 disabled={saving || discard}
                 onRunningChange={setAttachmentRunning}
+                onChanged={() => {
+                  hadUploads.current = true;
+                }}
               />
             )}
             {!item && !["file", "photo"].includes(kind) && (
@@ -878,7 +884,11 @@ export default function Editor({
             <button
               className="button secondary danger-text"
               disabled={saving || (canKeepDraft && !draftState.ready)}
-              onClick={() => (canKeepDraft ? void closeWith("discard") : onClose())}
+              onClick={() =>
+                canKeepDraft
+                  ? void closeWith("discard")
+                  : onClose(hadUploads.current || uploadsRunning)
+              }
             >
               {canKeepDraft ? "彻底丢弃" : "关闭并丢弃修改"}
             </button>
