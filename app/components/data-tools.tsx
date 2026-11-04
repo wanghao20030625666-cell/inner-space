@@ -92,7 +92,7 @@ export default function DataTools({
   async function changeTags() {
     await run(async () => {
       let done = 0;
-      for (let batch = 0; batch < 1001; batch++) {
+      for (let batch = 0; batch < 201; batch++) {
         setProgress(`正在整理标签，已更新 ${done} 条`);
         const r = await api<{ changed: number; remaining: number }>("/api/tags", {
           method: "PATCH",

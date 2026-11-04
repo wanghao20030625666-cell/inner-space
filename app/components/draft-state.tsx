@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/client";
 export type DraftData = {
+  baseVersion?: number;
   kind: import("../lib/model").Kind;
   title: string;
   content: string;
@@ -133,8 +134,9 @@ export function useDraft(
     if (pending.current) await pending.current;
     try {
       await clear();
+      return null;
     } catch {
-      /* A newer draft in another tab is intentionally kept. */
+      return "正式内容已保存；草稿未清理，重新打开时请先核对草稿与正式内容的时间。";
     }
   }
   return {

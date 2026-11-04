@@ -20,6 +20,14 @@ import { moduleFor } from "../lib/catalog";
 import { fileSize, formatDate, formatTime } from "../lib/client";
 import { safeLink, type SpaceRecord, type Collection } from "../lib/model";
 
+export type RecordActions = {
+  open: (item: SpaceRecord) => void;
+  duplicate: (item: SpaceRecord) => void;
+  photoPreview: (item: SpaceRecord) => void;
+  mutate: (item: SpaceRecord, changes: Record<string, unknown>) => void;
+  select: (id: string) => void;
+  remove: (item: SpaceRecord) => void;
+};
 type Props = {
   item: SpaceRecord;
   list: boolean;
@@ -27,18 +35,7 @@ type Props = {
   selected: boolean;
   collections: Collection[];
   projectProgress?: { total: number; done: number };
-  onOpen: () => void;
-  onDuplicate: () => void;
-  onPhotoPreview: () => void;
-  onFavorite: () => void;
-  onPin: () => void;
-  onToggle: () => void;
-  onRestore: () => void;
-  onDelete: () => void;
-  onTrash: () => void;
-  onArchive: () => void;
-  onRead: () => void;
-  onSelect: () => void;
+  actions: RecordActions;
 };
 export default function RecordCard({
   item: r,
@@ -47,19 +44,28 @@ export default function RecordCard({
   selected,
   collections,
   projectProgress,
-  onDuplicate,
-  onPhotoPreview,
-  onOpen,
-  onFavorite,
-  onPin,
-  onToggle,
-  onRestore,
-  onDelete,
-  onTrash,
-  onArchive,
-  onRead,
-  onSelect,
+  actions,
 }: Props) {
+  const onOpen = () => actions.open(r),
+    onDuplicate = () => actions.duplicate(r),
+    onPhotoPreview = () => actions.photoPreview(r),
+    onSelect = () => actions.select(r.id),
+    onDelete = () => actions.remove(r),
+    onFavorite = () => actions.mutate(r, { favorite: !r.favorite }),
+    onPin = () => actions.mutate(r, { pinned: !r.pinned }),
+    onToggle = () =>
+      actions.mutate(r, {
+        status: r.status === "done" ? "active" : "done",
+        meta: { ...r.meta, stage: r.status === "done" ? "todo" : "done" },
+      }),
+    onRestore = () => actions.mutate(r, { action: "restore" }),
+    onTrash = () => actions.mutate(r, { action: "trash" }),
+    onArchive = () =>
+      actions.mutate(r, { action: r.status === "archived" ? "unarchive" : "archive" }),
+    onRead = () =>
+      actions.mutate(r, {
+        meta: { ...r.meta, readState: r.meta.readState === "read" ? "unread" : "read" },
+      });
   const m = moduleFor(r.kind),
     Icon = m.icon,
     collection = collections.find((c) => c.id === r.collectionId),

@@ -216,3 +216,12 @@ export function safeLink(value: unknown): string | undefined {
     return undefined;
   }
 }
+
+/** API date hints use the same real-calendar validation as stored dates. */
+export function isCalendarDate(value: string) {
+  return (
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    !Number.isNaN(Date.parse(value)) &&
+    new Date(value).toISOString().slice(0, 10) === value
+  );
+}

@@ -1,4 +1,6 @@
 "use client";
+import OnThisDay from "./on-this-day";
+import LedgerTrend from "./ledger-trend";
 import { useState } from "react";
 import {
   ArrowRight,
@@ -246,6 +248,7 @@ export default function Dashboard({
               </div>
             )}
           </section>
+          <OnThisDay items={data.onThisDay} onOpen={onOpen} />
           <section className="collection-section">
             <div className="section-title">
               <h2>我的专题</h2>
@@ -374,6 +377,11 @@ export default function Dashboard({
               )}
             </div>
           </section>
+          {data.ledger.months.length > 0 && (
+            <section className="panel home-trend">
+              <LedgerTrend months={data.ledger.months} anchor={today.slice(0, 7)} />
+            </section>
+          )}
           <section className="recent-activity">
             <div className="section-title">
               <h2>最近操作</h2>

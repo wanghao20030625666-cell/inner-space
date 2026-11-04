@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { getChatGPTUser } from "./chatgpt-auth";
+import { loadPreferences } from "./lib/preferences.server";
 
 export const metadata: Metadata = {
   title: "隐序 · 私人空间",
@@ -10,13 +12,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const user = await getChatGPTUser(),
+    preferences = user ? await loadPreferences(user.userId) : null;
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" data-theme={preferences?.theme || "light"}>
       <body className="antialiased">{children}</body>
     </html>
   );

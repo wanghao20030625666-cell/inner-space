@@ -13,14 +13,14 @@ import {
   retention,
 } from "../../lib/server";
 import { recordQuery } from "../../lib/query";
-import { defaultPreferences, fromRow } from "../../lib/model";
+import { defaultPreferences, fromRow, isCalendarDate } from "../../lib/model";
 
 export async function GET(request: Request) {
   try {
     const owner = await authorize(request),
       db = database(),
       params = new URL(request.url).searchParams;
-    const today = /^\d{4}-\d{2}-\d{2}$/.test(params.get("today") || "")
+    const today = isCalendarDate(params.get("today") || "")
       ? params.get("today")!
       : new Date().toISOString().slice(0, 10);
     const query = recordQuery(owner, params),
@@ -67,6 +67,7 @@ export async function GET(request: Request) {
       ledgerTotals,
       ledgerCategories,
       ledgerMonths,
+      onThisDay,
     ] = await Promise.all([
       db
         .prepare(
@@ -161,6 +162,12 @@ export async function GET(request: Request) {
         )
         .bind(...totalValues)
         .all(),
+      db
+        .prepare(
+          "SELECT * FROM records WHERE owner = ? AND kind = 'journal' AND deleted_at IS NULL AND status != 'archived' AND substr(due_at,6,5) = ? AND substr(due_at,1,4) < ? ORDER BY due_at DESC,updated_at DESC,id DESC LIMIT 5",
+        )
+        .bind(owner, today.slice(5), today.slice(0, 4))
+        .all<Record<string, unknown>>(),
     ]);
     const items = rows.results.slice(0, 200).map(fromRow),
       last = items.at(-1);
@@ -171,6 +178,7 @@ export async function GET(request: Request) {
         months: ledgerMonths.results,
       },
       items,
+      onThisDay: onThisDay.results.map(fromRow),
       recent: recent.results.map(fromRow),
       dueTasks: dueTasks.results.map(fromRow),
       upcoming: upcoming.results.map(fromRow),

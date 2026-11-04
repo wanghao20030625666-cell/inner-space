@@ -8,8 +8,6 @@ import {
   RefreshCw,
   FolderOpen,
   ChevronRight,
-  Settings2,
-  UserRound,
   ArrowUpRight,
   Upload,
   Loader2,
@@ -21,7 +19,6 @@ import {
   Star,
   Tag,
   Pencil,
-  Check,
 } from "lucide-react";
 import {
   kinds,
@@ -31,10 +28,8 @@ import {
   type View,
   type Preferences,
 } from "./lib/model";
-import { api, initialData, type Data } from "./lib/client";
-import { modules, extraModules, moduleFor, type Module } from "./lib/catalog";
-import Modal from "./components/modal";
-import Editor from "./components/editor";
+import { api, type Data } from "./lib/client";
+import { modules, extraModules, moduleFor } from "./lib/catalog";
 import RecordCard from "./components/record-card";
 import CalendarView from "./components/calendar";
 import ActivityList from "./components/activity-list";
@@ -43,9 +38,11 @@ import Dashboard from "./components/dashboard";
 import TaskBoard from "./components/task-board";
 import Ledger from "./components/ledger";
 import UploadQueue, { type UploadBatch } from "./components/upload-queue";
-import ImageViewer from "./components/image-viewer";
 
-type EditorState = { kind: Kind; item?: SpaceRecord; date?: string };
+import { useSpaceData } from "./hooks/use-space-data";
+import { useWorkspaceUi } from "./hooks/use-workspace-ui";
+import WorkspaceDialogs from "./components/workspace-dialogs";
+import WorkspaceSidebar from "./components/workspace-sidebar";
 export default function Workspace({
   user,
   initialPreferences,
@@ -53,10 +50,7 @@ export default function Workspace({
   user: { name: string; email: string };
   initialPreferences: Preferences;
 }) {
-  const [view, setView] = useState<View>("overview"),
-    [data, setData] = useState<Data>({ ...initialData, preferences: initialPreferences }),
-    [loading, setLoading] = useState(true),
-    [error, setError] = useState("");
+  const [view, setView] = useState<View>("overview");
   const [query, setQuery] = useState(""),
     [search, setSearch] = useState(""),
     [tag, setTag] = useState(""),
@@ -71,32 +65,50 @@ export default function Workspace({
   const [calendarMonth, setCalendarMonth] = useState(localDate().slice(0, 7)),
     [calendarDate, setCalendarDate] = useState(localDate()),
     [uploadBatch, setUploadBatch] = useState<UploadBatch | null>(null),
-    [imageIndex, setImageIndex] = useState<number | null>(null),
-    [undo, setUndo] = useState<SpaceRecord[]>([]),
     [dropActive, setDropActive] = useState(false);
   const [collectionId, setCollectionId] = useState(""),
     [sidebar, setSidebar] = useState(false),
     [layout, setLayout] = useState<"grid" | "list" | "board">("grid"),
     [now, setNow] = useState<Date | null>(null),
-    [loadedKey, setLoadedKey] = useState("");
-  const [editor, setEditor] = useState<EditorState | null>(null),
-    [chooser, setChooser] = useState(false),
     [toast, setToast] = useState(""),
     [busy, setBusy] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]),
-    [deleteItem, setDeleteItem] = useState<SpaceRecord | null>(null),
-    [bulkTrash, setBulkTrash] = useState(false);
-  const [collectionEditor, setCollectionEditor] = useState<{
-      id?: string;
-      name: string;
-      color: string;
-    } | null>(null),
-    [collectionError, setCollectionError] = useState("");
+  const ui = useWorkspaceUi();
+  const {
+    state: { undo, selected },
+    setEditor,
+    setChooser,
+    setImageIndex,
+    setUndo,
+    setSelected,
+    setDeleteItem,
+    setBulkTrash,
+    setCollectionEditor,
+    setCollectionError,
+  } = ui;
   const searchRef = useRef<HTMLInputElement>(null),
     uploadRef = useRef<HTMLInputElement>(null),
-    uploadKind = useRef<Kind>("file"),
-    serial = useRef(0),
-    cursor = useRef<string | null>(null);
+    uploadKind = useRef<Kind>("file");
+  const resetSelection = useCallback(() => setSelected([]), [setSelected]);
+  const { data, setData, loading, error, loadedKey, dataKey, reload, refreshCurrent, applyRecord } =
+    useSpaceData(
+      {
+        view,
+        search,
+        collectionId,
+        tag,
+        status,
+        reading,
+        month,
+        sort,
+        priority,
+        deadline,
+        fileType,
+        kindFilter,
+        today: localDate(now || new Date()),
+      },
+      initialPreferences,
+      resetSelection,
+    );
   const selectedCollection = data.collections.find((c) => c.id === collectionId),
     current =
       view === "collection"
@@ -108,23 +120,9 @@ export default function Workspace({
           }
         : moduleFor(view),
     activeSearch = !!search;
-  // A route can render before its fetch effect runs. Keep the previous module's
-  // records hidden until the response belongs to the current route and filters.
-  const dataKey = JSON.stringify([
-    view,
-    search,
-    collectionId,
-    tag,
-    status,
-    reading,
-    month,
-    sort,
-    priority,
-    deadline,
-    fileType,
-    kindFilter,
-  ]);
-
+  useEffect(() => {
+    document.documentElement.dataset.theme = data.preferences.theme;
+  }, [data.preferences.theme]);
   useEffect(() => {
     setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 60000);
@@ -164,7 +162,7 @@ export default function Workspace({
     read();
     addEventListener("hashchange", read);
     return () => removeEventListener("hashchange", read);
-  }, []);
+  }, [setSelected]);
   const navigate = (v: View, collection = "") => {
     setView(v);
     setCollectionId(collection);
@@ -184,101 +182,6 @@ export default function Workspace({
     setSidebar(false);
     setLayout(v === "task" ? "board" : v === "file" || v === "contact" ? "list" : "grid");
   };
-  const reload = useCallback(
-    async (append = false) => {
-      const id = ++serial.current;
-      setError("");
-      if (!append) setLoading(true);
-      try {
-        const p = new URLSearchParams({
-          today: localDate(),
-          scope:
-            view === "trash"
-              ? "trash"
-              : view === "archive"
-                ? "archive"
-                : view === "favorites"
-                  ? "favorites"
-                  : "active",
-        });
-        if (search) p.set("q", search);
-        else {
-          if (kinds.includes(view as Kind)) p.set("kind", view);
-          if (collectionId) p.set("collection", collectionId);
-        }
-        if (tag) p.set("tag", tag);
-        if (status !== "all") p.set("status", status);
-        if (reading !== "all") p.set("reading", reading);
-        if (month) p.set("month", month);
-        p.set("sort", sort);
-        if (priority) p.set("priority", priority);
-        if (fileType) p.set("fileType", fileType);
-        if (activeSearch && kindFilter) p.set("kind", kindFilter);
-        if (deadline) {
-          p.set("status", "active");
-          const today = new Date(),
-            end = new Date();
-          if (deadline === "overdue") {
-            end.setDate(end.getDate() - 1);
-            p.set("to", localDate(end));
-          } else if (deadline === "undated") p.set("undated", "1");
-          else {
-            p.set("from", localDate(today));
-            if (deadline === "week") end.setDate(end.getDate() + 6);
-            p.set("to", localDate(end));
-          }
-        }
-        if (append && cursor.current) {
-          p.set("cursor", cursor.current);
-          p.set("lite", "1");
-        }
-        const result = await api<Data>(`/api/space?${p}`);
-        if (id === serial.current) {
-          cursor.current = result.nextCursor;
-          setData((prev) => ({
-            ...prev,
-            ...result,
-            items: append
-              ? [
-                  ...prev.items,
-                  ...result.items.filter((r) => !prev.items.some((p) => p.id === r.id)),
-                ]
-              : result.items,
-          }));
-          setLoadedKey(dataKey);
-          if (!append) setSelected([]);
-        }
-      } catch (e) {
-        if (id === serial.current) setError(e instanceof Error ? e.message : "加载失败");
-      } finally {
-        if (id === serial.current) setLoading(false);
-      }
-    },
-    [
-      view,
-      search,
-      collectionId,
-      tag,
-      status,
-      reading,
-      month,
-      sort,
-      priority,
-      deadline,
-      fileType,
-      kindFilter,
-      activeSearch,
-      dataKey,
-    ],
-  );
-  const currentReload = useRef<() => Promise<void>>(async () => {});
-  useEffect(() => {
-    currentReload.current = () => reload();
-  }, [reload]);
-  const refreshCurrent = useCallback(() => currentReload.current(), []);
-  useEffect(() => {
-    void reload();
-  }, [reload]);
   useEffect(() => {
     const handle = (e: KeyboardEvent) => {
       if (document.querySelector('[role="dialog"]')) return;
@@ -293,7 +196,7 @@ export default function Workspace({
     };
     addEventListener("keydown", handle);
     return () => removeEventListener("keydown", handle);
-  }, []);
+  }, [setSelected]);
   const notifyError = (e: unknown) => setToast(e instanceof Error ? e.message : "操作未完成");
   const open = (item: SpaceRecord) => setEditor({ kind: item.kind, item });
   const create = (kind: Kind, date?: string) => {
@@ -315,7 +218,7 @@ export default function Workspace({
         body: JSON.stringify({ id: item.id, version: item.version, ...changes }),
       });
       setUndo(changes.action === "trash" ? [result.item] : []);
-      await refreshCurrent();
+      if (!applyRecord(item, result.item)) await refreshCurrent();
       setToast(
         changes.action === "trash"
           ? "已移入回收站"
@@ -431,145 +334,49 @@ export default function Workspace({
       failed ? `已处理 ${done} 条，${failed} 条处理失败，请刷新后检查` : `已处理 ${done} 条内容`,
     );
   }
-  async function saveCollection() {
-    if (!collectionEditor) return;
-    setBusy(true);
-    setCollectionError("");
-    try {
-      await api("/api/collections", {
-        method: collectionEditor.id ? "PATCH" : "POST",
-        body: JSON.stringify(collectionEditor),
-      });
-      setCollectionEditor(null);
-      await refreshCurrent();
-      setToast("专题已保存");
-    } catch (e) {
-      setCollectionError(e instanceof Error ? e.message : "保存失败");
-    } finally {
-      setBusy(false);
+  const select = (id: string) => {
+    if (selected.length >= 100 && !selected.includes(id)) {
+      setToast("一次最多选择 100 条");
+      return;
     }
-  }
-  const count = (v: View) =>
-    data.counts
-      .filter((c) =>
-        v === "trash"
-          ? !!c.deleted
-          : !c.deleted &&
-            (v === "archive"
-              ? c.status === "archived"
-              : c.status !== "archived" && (v === "favorites" ? !!c.favorite : c.kind === v)),
-      )
-      .reduce((sum, c) => sum + c.count, 0);
-  const select = (id: string) =>
-    setSelected((prev) =>
-      prev.includes(id)
-        ? prev.filter((v) => v !== id)
-        : prev.length < 100
-          ? [...prev, id]
-          : (setToast("一次最多选择 100 条"), prev),
-    );
+    setSelected((prev) => (prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]));
+  };
   const addCollection = () => {
     setCollectionError("");
     setCollectionEditor({ name: "", color: "green" });
   };
 
+  const recordActions = {
+    open,
+    duplicate: (r: SpaceRecord) => {
+      void duplicate(r);
+    },
+    photoPreview: (r: SpaceRecord) =>
+      setImageIndex(
+        data.items
+          .filter((x) => x.kind === "photo" && !x.deletedAt)
+          .findIndex((x) => x.id === r.id),
+      ),
+    mutate: (r: SpaceRecord, changes: Record<string, unknown>) => {
+      void mutate(r, changes);
+    },
+    select,
+    remove: setDeleteItem,
+  };
   return (
     <div className={`workspace ${data.preferences.theme === "dark" ? "dark" : ""}`}>
       {sidebar && (
         <button className="sidebar-scrim" onClick={() => setSidebar(false)} aria-label="关闭导航" />
       )}
-      <aside className={`sidebar ${sidebar ? "open" : ""}`}>
-        <a
-          className="brand"
-          href="#overview"
-          onClick={(e) => {
-            e.preventDefault();
-            navigate("overview");
-          }}
-        >
-          <span className="brand-mark">
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-          <strong>隐序</strong>
-          <small>个人空间</small>
-        </a>
-        <button className="space-switch" onClick={() => navigate("settings")}>
-          <span className="space-avatar">{data.preferences.name.slice(0, 1)}</span>
-          <span>
-            <strong>{data.preferences.name}</strong>
-            <small>当前登录账户的空间</small>
-          </span>
-          <ChevronRight size={14} />
-        </button>
-        <div className="nav-scroll">
-          <nav aria-label="工作空间">
-            {modules.slice(0, 2).map((m) => (
-              <NavItem
-                key={m.id}
-                m={m}
-                active={view === m.id}
-                count={m.id === "inbox" ? count(m.id) : undefined}
-                onClick={() => navigate(m.id)}
-              />
-            ))}
-            <div className="nav-label">记录与安排</div>
-            {modules.slice(2, 7).map((m) => (
-              <NavItem key={m.id} m={m} active={view === m.id} onClick={() => navigate(m.id)} />
-            ))}
-            <div className="nav-label">资料与生活</div>
-            {modules.slice(7).map((m) => (
-              <NavItem key={m.id} m={m} active={view === m.id} onClick={() => navigate(m.id)} />
-            ))}
-            <div className="nav-label nav-collection-label">
-              我的专题
-              <button onClick={addCollection} aria-label="新建专题">
-                <Plus size={14} />
-              </button>
-            </div>
-            {data.collections.map((c) => (
-              <button
-                key={c.id}
-                className={`nav-item collection-nav ${view === "collection" && collectionId === c.id ? "active" : ""}`}
-                onClick={() => navigate("collection", c.id)}
-              >
-                <i className={`collection-dot ${c.color}`} />
-                <span>{c.name}</span>
-                <small>{c.count}</small>
-              </button>
-            ))}
-            {!data.collections.length && (
-              <button className="new-collection-link" onClick={addCollection}>
-                <Plus size={13} />
-                建一个专题
-              </button>
-            )}
-            <div className="nav-divider" />
-            {extraModules.slice(0, 3).map((m) => (
-              <NavItem key={m.id} m={m} active={view === m.id} onClick={() => navigate(m.id)} />
-            ))}
-          </nav>
-        </div>
-        <div className="sidebar-bottom">
-          <NavItem
-            m={extraModules[4]}
-            active={view === "settings"}
-            onClick={() => navigate("settings")}
-          />
-          <button className="account" onClick={() => navigate("settings")}>
-            <span className="account-avatar">
-              <UserRound size={17} />
-            </span>
-            <span>
-              <strong>{user.name === "我的空间" ? data.preferences.name : user.name}</strong>
-              <small>账户与数据</small>
-            </span>
-            <Settings2 size={15} />
-          </button>
-        </div>
-      </aside>
+      <WorkspaceSidebar
+        data={data}
+        user={user}
+        view={view}
+        collectionId={collectionId}
+        sidebar={sidebar}
+        navigate={navigate}
+        addCollection={addCollection}
+      />
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
@@ -1041,43 +848,10 @@ export default function Workspace({
                       item={r}
                       list={layout === "list"}
                       selected={selected.includes(r.id)}
-                      onSelect={() => select(r.id)}
                       collections={data.collections}
                       projectProgress={data.projectTasks.find((p) => p.projectId === r.id)}
                       busy={busy}
-                      onDuplicate={() => void duplicate(r)}
-                      onPhotoPreview={() =>
-                        setImageIndex(
-                          data.items
-                            .filter((x) => x.kind === "photo" && !x.deletedAt)
-                            .findIndex((x) => x.id === r.id),
-                        )
-                      }
-                      onOpen={() => open(r)}
-                      onFavorite={() => void mutate(r, { favorite: !r.favorite })}
-                      onPin={() => void mutate(r, { pinned: !r.pinned })}
-                      onToggle={() =>
-                        void mutate(r, {
-                          status: r.status === "done" ? "active" : "done",
-                          meta: { ...r.meta, stage: r.status === "done" ? "todo" : "done" },
-                        })
-                      }
-                      onRestore={() => void mutate(r, { action: "restore" })}
-                      onDelete={() => setDeleteItem(r)}
-                      onTrash={() => void mutate(r, { action: "trash" })}
-                      onArchive={() =>
-                        void mutate(r, {
-                          action: r.status === "archived" ? "unarchive" : "archive",
-                        })
-                      }
-                      onRead={() =>
-                        void mutate(r, {
-                          meta: {
-                            ...r.meta,
-                            readState: r.meta.readState === "read" ? "unread" : "read",
-                          },
-                        })
-                      }
+                      actions={recordActions}
                     />
                   ))}
                 </div>
@@ -1166,230 +940,23 @@ export default function Workspace({
         </div>
       )}
       <UploadQueue batch={uploadBatch} onComplete={refreshCurrent} />
-      {imageIndex !== null && (
-        <ImageViewer
-          items={data.items.filter((r) => r.kind === "photo" && !r.deletedAt)}
-          index={imageIndex}
-          onIndex={setImageIndex}
-          onClose={() => setImageIndex(null)}
-          onEdit={open}
-        />
-      )}
-      {chooser && (
-        <Modal title="添加内容" subtitle="选择要保存的内容类型。" onClose={() => setChooser(false)}>
-          <div className="create-grid">
-            {modules.slice(1).map((m) => (
-              <button key={m.id} onClick={() => create(m.id as Kind)}>
-                <m.icon size={23} />
-                <strong>{m.name}</strong>
-                <small>
-                  {m.id === "file" || m.id === "photo" ? "选择文件上传" : m.description}
-                </small>
-              </button>
-            ))}
-          </div>
-        </Modal>
-      )}
-      {editor && (
-        <Editor
-          key={editor.item?.id || editor.kind + (editor.date || "")}
-          kind={editor.kind}
-          item={editor.item}
-          date={editor.date}
-          collections={data.collections}
-          collectionId={collectionId === "none" ? null : collectionId || null}
-          onClose={() => {
-            setEditor(null);
-            if (editor.kind === "project") void reload();
-          }}
-          onSaved={async () => {
-            setEditor(null);
-            await refreshCurrent();
-            setToast("已保存");
-          }}
-          onTrash={async (item) => {
-            await api("/api/space", {
-              method: "PATCH",
-              body: JSON.stringify({ id: item.id, version: item.version, action: "trash" }),
-            });
-            setEditor(null);
-            await refreshCurrent();
-            setToast("已移入回收站");
-          }}
-        />
-      )}
-      {collectionEditor && (
-        <Modal
-          title={collectionEditor.id ? "编辑专题" : "新建专题"}
-          subtitle="把同一件事相关的内容放在一起。"
-          onClose={() => {
-            if (!busy) setCollectionEditor(null);
-          }}
-        >
-          <form
-            className="collection-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void saveCollection();
-            }}
-          >
-            <label className="field">
-              专题名称
-              <input
-                required
-                maxLength={40}
-                autoFocus
-                value={collectionEditor.name}
-                onChange={(e) => setCollectionEditor({ ...collectionEditor, name: e.target.value })}
-                placeholder="例如：家里装修、学习资料、旅行计划"
-              />
-            </label>
-            <div className="field">
-              标记颜色
-              <div className="color-options">
-                {["green", "clay", "blue", "purple", "gray"].map((color) => (
-                  <button
-                    type="button"
-                    aria-label={`选择${color}颜色`}
-                    className={`collection-dot ${color} ${collectionEditor.color === color ? "selected" : ""}`}
-                    key={color}
-                    onClick={() => setCollectionEditor({ ...collectionEditor, color })}
-                  >
-                    {collectionEditor.color === color && <Check size={14} />}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {collectionError && <p className="form-error">{collectionError}</p>}
-            <div className="collection-form-actions">
-              {collectionEditor.id && (
-                <button
-                  type="button"
-                  className="text-button danger-text"
-                  disabled={busy}
-                  onClick={() =>
-                    setCollectionError("移除专题会保留内容。请点击下方“确认移除专题”完成。")
-                  }
-                >
-                  移除专题
-                </button>
-              )}
-              {collectionError.startsWith("移除专题") && (
-                <button
-                  type="button"
-                  className="button secondary"
-                  disabled={busy}
-                  onClick={async () => {
-                    setBusy(true);
-                    try {
-                      await api("/api/collections", {
-                        method: "DELETE",
-                        body: JSON.stringify({ id: collectionEditor.id }),
-                      });
-                      setCollectionEditor(null);
-                      if (view === "collection") navigate("overview");
-                      else await refreshCurrent();
-                      setToast("专题已移除，内容已保留");
-                    } catch (e) {
-                      setCollectionError(e instanceof Error ? e.message : "移除失败");
-                    } finally {
-                      setBusy(false);
-                    }
-                  }}
-                >
-                  确认移除专题
-                </button>
-              )}
-              <button className="button primary" type="submit" disabled={busy}>
-                {busy ? "保存中…" : "保存专题"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      )}
-      {bulkTrash && (
-        <Modal
-          title={`将 ${selected.length} 条内容移入回收站？`}
-          subtitle="之后可以在回收站恢复。"
-          onClose={() => setBulkTrash(false)}
-        >
-          <div className="confirm-actions">
-            <button className="button secondary" onClick={() => setBulkTrash(false)}>
-              取消
-            </button>
-            <button
-              className="button primary"
-              disabled={busy}
-              onClick={() => void bulk({ action: "trash" })}
-            >
-              确认移入
-            </button>
-          </div>
-        </Modal>
-      )}
-      {deleteItem && (
-        <Modal
-          title="彻底删除这条内容？"
-          subtitle={`“${deleteItem.title}”的内容、历史版本和附件将无法恢复。`}
-          onClose={() => {
-            if (!busy) setDeleteItem(null);
-          }}
-        >
-          <div className="confirm-actions">
-            <button className="button secondary" onClick={() => setDeleteItem(null)}>
-              取消
-            </button>
-            <button
-              className="button danger"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  const r = await api("/api/space", {
-                    method: "DELETE",
-                    body: JSON.stringify({ id: deleteItem.id, version: deleteItem.version }),
-                  });
-                  setDeleteItem(null);
-                  await refreshCurrent();
-                  setToast(
-                    r.cleanupPending ? "内容已删除，附件待清理，可在设置中重试" : "已彻底删除",
-                  );
-                } catch (e) {
-                  notifyError(e);
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              彻底删除
-            </button>
-          </div>
-        </Modal>
-      )}
+      <WorkspaceDialogs
+        ui={ui}
+        data={data}
+        busy={busy}
+        setBusy={setBusy}
+        setToast={setToast}
+        collectionId={collectionId}
+        view={view}
+        navigate={navigate}
+        create={create}
+        open={open}
+        bulk={bulk}
+        refreshCurrent={refreshCurrent}
+        onRecordSaved={async (previous, item) => {
+          if (!applyRecord(previous, item)) await refreshCurrent();
+        }}
+      />
     </div>
-  );
-}
-
-function NavItem({
-  m,
-  active,
-  count,
-  onClick,
-}: {
-  m: Module;
-  active: boolean;
-  count?: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={`nav-item ${active ? "active" : ""}`}
-      onClick={onClick}
-      aria-current={active ? "page" : undefined}
-    >
-      <m.icon size={17} />
-      <span>{m.name}</span>
-      {count !== undefined && count > 0 && <small>{count}</small>}
-    </button>
   );
 }

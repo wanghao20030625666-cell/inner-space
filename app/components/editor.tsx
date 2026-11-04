@@ -19,6 +19,7 @@ import Markdown from "./markdown";
 import ProjectTasks from "./project-tasks";
 import Checklist from "./checklist";
 import Attachments from "./attachments";
+import DraftRecovery from "./draft-recovery";
 import FilePreview from "./file-preview";
 import { useDraft, type DraftData } from "./draft-state";
 import { exportRecord } from "../lib/exports";
@@ -57,12 +58,13 @@ export default function Editor({
   collections: Collection[];
   collectionId: string | null;
   onClose: () => void;
-  onSaved: () => Promise<void>;
+  onSaved: (item: SpaceRecord, notice?: string | null) => Promise<void>;
   onTrash: (r: SpaceRecord) => Promise<void>;
 }) {
   const [draft, setDraft] = useState<Draft>(() =>
     item
       ? {
+          baseVersion: item.version,
           kind: item.kind,
           title: item.title,
           content: item.content,
@@ -74,7 +76,12 @@ export default function Editor({
           pinned: !!item.pinned,
           collectionId: item.collectionId || null,
         }
-      : { ...newDraft(initialKind), collectionId, ...(date ? { dueAt: date } : {}) },
+      : {
+          baseVersion: 0,
+          ...newDraft(initialKind),
+          collectionId,
+          ...(date ? { dueAt: date } : {}),
+        },
   );
   const kind = draft.kind;
   const initial = useRef(JSON.stringify(draft)),
@@ -137,9 +144,12 @@ export default function Editor({
             }
           : {}),
       };
-      await api("/api/space", { method: item ? "PATCH" : "POST", body: JSON.stringify(payload) });
-      await draftState.finish();
-      await onSaved();
+      const result = await api<{ item: SpaceRecord }>("/api/space", {
+        method: item ? "PATCH" : "POST",
+        body: JSON.stringify(payload),
+      });
+      const notice = await draftState.finish();
+      await onSaved(result.item, notice);
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存失败");
     } finally {
@@ -199,26 +209,15 @@ export default function Editor({
         </div>
       )}
       {draftState.candidate && (
-        <div className="draft-recovery">
-          <strong>找到未完成的草稿</strong>
-          <p>
-            {draftState.candidate.data.title || "未填写标题"} ·{" "}
-            {formatTime(draftState.candidate.updatedAt)}
-          </p>
-          <button type="button" className="button primary" onClick={draftState.restore}>
-            恢复草稿
-          </button>
-          <button
-            type="button"
-            className="button secondary"
-            onClick={() => {
-              if (confirm("放弃这份草稿？正式内容会保留。"))
-                void draftState.discard().catch((e) => setError(e.message));
-            }}
-          >
-            放弃草稿
-          </button>
-        </div>
+        <DraftRecovery
+          draft={draftState.candidate}
+          current={item}
+          onRestore={draftState.restore}
+          onDiscard={() => {
+            if (confirm("放弃这份草稿？正式内容会保留。"))
+              void draftState.discard().catch((e) => setError(e.message));
+          }}
+        />
       )}
       {error && (
         <div className="form-error" role="alert">

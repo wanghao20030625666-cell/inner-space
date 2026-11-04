@@ -1,4 +1,5 @@
 "use client";
+import LedgerTrend from "./ledger-trend";
 import { Download } from "lucide-react";
 import { useState } from "react";
 import { allRecords, download, ledgerCSV, localDate } from "../lib/exports";
@@ -31,6 +32,9 @@ export default function Ledger({
           </div>
         ))}
       </div>
+      <section className="panel ledger-trend-panel">
+        <LedgerTrend months={value.months} />
+      </section>
       <div className="ledger-details">
         <section className="panel">
           <div className="panel-heading">

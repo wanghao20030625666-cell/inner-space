@@ -24,6 +24,7 @@ export type Data = {
   ledger: LedgerData;
   items: SpaceRecord[];
   recent: SpaceRecord[];
+  onThisDay: SpaceRecord[];
   activity: Activity[];
   preferences: Preferences;
   counts: Count[];
@@ -41,6 +42,7 @@ export const initialData: Data = {
   ledger: { count: 0, incomeCents: 0, expenseCents: 0, categories: [], months: [] },
   items: [],
   recent: [],
+  onThisDay: [],
   activity: [],
   preferences: defaultPreferences,
   counts: [],

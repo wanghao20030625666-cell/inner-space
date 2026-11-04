@@ -9,6 +9,7 @@ const input = z.object({
     ),
   version: z.number().int().min(0),
   data: z.object({
+    baseVersion: z.number().int().min(0).optional(),
     kind: z.enum(kinds),
     title: z.string().max(160),
     content: z.string().max(100000),

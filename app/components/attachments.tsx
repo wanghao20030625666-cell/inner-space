@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Paperclip, Download, X, RefreshCw } from "lucide-react";
 import { api, fileSize, type Data } from "../lib/client";
+import UploadQueue, { type UploadBatch } from "./upload-queue";
 import type { SpaceRecord } from "../lib/model";
 /** Uploads attach files by authorized record ID; detaching keeps the file library copy. */
 export default function Attachments({
@@ -14,7 +15,8 @@ export default function Attachments({
   const [items, setItems] = useState<SpaceRecord[]>([]),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    input = useRef<HTMLInputElement>(null);
+    input = useRef<HTMLInputElement>(null),
+    [batch, setBatch] = useState<UploadBatch | null>(null);
   const load = useCallback(async () => {
     const r = await api<Data>(`/api/space?parent=${parent.id}&scope=all&lite=1`);
     setItems(r.items);
@@ -22,30 +24,16 @@ export default function Attachments({
   useEffect(() => {
     load().catch(() => setError("附件读取失败，可点击刷新重试"));
   }, [load]);
-  async function upload(files: FileList | null) {
-    if (!files?.length) return;
-    setBusy(true);
-    setError("");
-    let count = 0;
-    try {
-      for (const file of Array.from(files)) {
-        if (file.size > 25 * 1024 * 1024) throw new Error(`${file.name} 超过 25 MB`);
-        const form = new FormData();
-        form.set("file", file);
-        form.set("kind", "file");
-        form.set("parentId", parent.id);
-        if (parent.collectionId) form.set("collectionId", parent.collectionId);
-        await api("/api/upload", { method: "POST", body: form });
-        count++;
-      }
-      await load();
-    } catch (e) {
-      setError(`已上传 ${count} 个。${e instanceof Error ? e.message : "上传失败"}`);
-      await load();
-    } finally {
-      setBusy(false);
-      if (input.current) input.current.value = "";
-    }
+  function upload(files: FileList | null) {
+    if (files?.length)
+      setBatch({
+        id: crypto.randomUUID(),
+        files: Array.from(files),
+        kind: "file",
+        parentId: parent.id,
+        collectionId: parent.collectionId,
+      });
+    if (input.current) input.current.value = "";
   }
   return (
     <section className="attachments">
@@ -80,6 +68,7 @@ export default function Attachments({
         type="file"
         onChange={(e) => void upload(e.target.files)}
       />
+      <UploadQueue batch={batch} onComplete={load} inline />
       {error && <p className="form-error">{error}</p>}
       {items.map((r) => (
         <div className="attachment-row" key={r.id}>

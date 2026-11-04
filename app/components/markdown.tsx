@@ -47,6 +47,20 @@ export default function Markdown({ text }: { text: string }) {
           <h4 key={i}>{value}</h4>
         ),
       );
+    } else if (/^[-*] \[([ xX])\] /.test(line)) {
+      const task = line.match(/^[-*] \[([ xX])\] (.*)$/)!;
+      nodes.push(
+        <p className="markdown-task" key={i}>
+          <input
+            type="checkbox"
+            checked={task[1].toLowerCase() === "x"}
+            readOnly
+            disabled
+            aria-label={task[2]}
+          />
+          <span>{inline(task[2])}</span>
+        </p>,
+      );
     } else if (/^[-*] /.test(line))
       nodes.push(
         <p className="markdown-bullet" key={i}>

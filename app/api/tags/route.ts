@@ -26,7 +26,7 @@ export async function PATCH(request: Request) {
     const db = database(),
       rows = await db
         .prepare(
-          "SELECT * FROM records WHERE owner = ? AND EXISTS (SELECT 1 FROM json_each(records.tags) WHERE value = ?) LIMIT 10",
+          "SELECT * FROM records WHERE owner = ? AND EXISTS (SELECT 1 FROM json_each(records.tags) WHERE value = ?) LIMIT 50",
         )
         .bind(owner, from)
         .all<Record<string, unknown>>(),
@@ -49,16 +49,16 @@ export async function PATCH(request: Request) {
           )
           .bind(JSON.stringify(tags), now, owner, r.id, r.version),
       );
+      statements.push(...retention(db, owner, r.id).slice(1));
     }
     const results = statements.length ? await db.batch(statements) : [],
-      changed = results.filter((_, i) => i % 2 === 1).reduce((n, r) => n + r.results.length, 0);
-    if (rows.results.length)
-      await db.batch(rows.results.flatMap((row) => retention(db, owner, String(row.id)).slice(1)));
+      changed = results.filter((_, i) => i % 3 === 1).reduce((n, r) => n + r.results.length, 0);
     if (changed)
       await db
         .prepare("INSERT INTO audit (id,owner,action,title,created_at) VALUES (?,?,'整理标签',?,?)")
         .bind(crypto.randomUUID(), owner, to ? `${from} → ${to}` : `移除 ${from}`, now)
         .run();
+    if (changed) await db.batch(retention(db, owner));
     const remaining = await db
       .prepare(
         "SELECT COUNT(*) AS n FROM records WHERE owner = ? AND EXISTS (SELECT 1 FROM json_each(records.tags) WHERE value = ?)",

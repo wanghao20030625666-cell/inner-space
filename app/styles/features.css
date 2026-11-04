@@ -581,3 +581,240 @@ fieldset.editor-fields {
     font-size: 10px;
   }
 }
+
+.inline-upload-queue {
+  position: static;
+  width: 100%;
+  margin: 15px 0;
+  box-shadow: none;
+  z-index: auto;
+}
+.draft-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin: 15px 0;
+}
+.draft-comparison article {
+  min-width: 0;
+  padding: 13px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.draft-comparison h3 {
+  font-size: 12px;
+  font-weight: 500;
+}
+.draft-comparison time {
+  font-size: 10px;
+  color: var(--muted);
+  display: block;
+  margin: 5px 0 12px;
+}
+.draft-comparison strong {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.draft-comparison pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 200px;
+  overflow: auto;
+  font:
+    11px/1.9 Consolas,
+    "Microsoft YaHei",
+    monospace;
+  margin: 10px 0 0;
+}
+.draft-warning {
+  border-left: 3px solid #b98a62;
+  padding-left: 10px;
+  color: #a27143 !important;
+}
+.ledger-trend-panel {
+  margin-bottom: 22px;
+}
+.ledger-trend {
+  padding: 20px 23px;
+  margin: 0;
+}
+.ledger-trend figcaption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.ledger-trend figcaption strong {
+  font-weight: 500;
+}
+.ledger-trend figcaption span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  color: var(--muted);
+}
+.ledger-trend figcaption i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: block;
+}
+.ledger-trend .income {
+  background: #6f9988;
+}
+.ledger-trend .expense {
+  background: #bc9b74;
+}
+.trend-columns {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 13px;
+  margin-top: 22px;
+}
+.trend-columns button {
+  min-width: 0;
+  text-align: center;
+  border-bottom: 2px solid transparent;
+  padding: 0 4px 5px;
+}
+.trend-columns button.selected {
+  border-color: var(--primary);
+  background: var(--hover);
+}
+.trend-bars {
+  height: 120px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  border-bottom: 1px solid var(--line);
+}
+.trend-bars i {
+  display: block;
+  width: min(22px, 35%);
+  max-height: 100%;
+  min-height: 0;
+  border-radius: 2px 2px 0 0;
+}
+.trend-columns small {
+  font-size: 10px;
+  display: block;
+  margin-top: 7px;
+  color: var(--sub);
+}
+.trend-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding-top: 14px;
+  font-size: 10px;
+  color: var(--sub);
+}
+.trend-detail strong {
+  font-weight: 500;
+}
+.trend-caption {
+  display: block;
+  margin-top: 8px;
+  font-size: 9px;
+  color: var(--muted);
+}
+.home-trend .ledger-trend {
+  padding: 19px;
+}
+.home-trend .trend-columns {
+  gap: 5px;
+}
+.home-trend .trend-detail {
+  gap: 6px;
+  font-size: 9px;
+}
+.on-this-day {
+  margin-bottom: 23px;
+}
+.on-this-day h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.on-this-day .panel-heading > span {
+  font-size: 10px;
+  color: var(--muted);
+}
+.on-this-day > div {
+  padding: 0 22px;
+}
+.on-this-day > div > button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  text-align: left;
+  gap: 17px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--line);
+}
+.on-this-day > div > button:last-child {
+  border: 0;
+}
+.on-this-day time {
+  font-size: 10px;
+  color: var(--primary);
+  white-space: nowrap;
+}
+.on-this-day strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.on-this-day p {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 5px;
+}
+.on-this-day button > span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+.markdown-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.markdown-task input {
+  width: 14px;
+  height: 14px;
+  margin: 6px 0 0;
+  flex-shrink: 0;
+  opacity: 1;
+}
+html[data-theme="dark"],
+html[data-theme="dark"] body {
+  background: #1b211d;
+  color-scheme: dark;
+}
+@media (max-width: 620px) {
+  .draft-comparison {
+    grid-template-columns: 1fr;
+  }
+  .trend-columns {
+    gap: 5px;
+  }
+  .ledger-trend {
+    padding: 17px;
+  }
+  .on-this-day > div {
+    padding: 0 17px;
+  }
+  .on-this-day > div > button {
+    gap: 10px;
+  }
+  .on-this-day time {
+    font-size: 9px;
+  }
+  .inline-upload-queue > div {
+    max-height: 200px;
+  }
+}
