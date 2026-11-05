@@ -97,6 +97,9 @@ export default function Editor({
         },
   );
   const kind = draft.kind;
+  const [taskEditor, setTaskEditor] = useState<SpaceRecord | null>(null),
+    [projectVisibleLimit, setProjectVisibleLimit] = useState(200),
+    [taskNotice, setTaskNotice] = useState("");
   const contentRef = useRef(draft.content);
   useEffect(() => {
     contentRef.current = draft.content;
@@ -251,6 +254,34 @@ export default function Editor({
       setError(e instanceof Error ? e.message : "历史版本加载失败");
     }
   };
+  // Replace the visible modal while keeping the parent project's unsaved draft mounted.
+  if (taskEditor)
+    return (
+      <Editor
+        key={taskEditor.id}
+        kind="task"
+        item={taskEditor}
+        collections={collections}
+        collectionId={taskEditor.collectionId}
+        onClose={(refresh) => {
+          if (refresh) hadUploads.current = true;
+          setTaskEditor(null);
+        }}
+        onSaved={async (_saved, notice, refresh) => {
+          if (refresh) hadUploads.current = true;
+          setTaskNotice(notice || "待办已保存");
+          setTaskEditor(null);
+        }}
+        onTrash={async (task) => {
+          await api("/api/space", {
+            method: "PATCH",
+            body: JSON.stringify({ id: task.id, version: task.version, action: "trash" }),
+          });
+          setTaskNotice("待办已移入回收站");
+          setTaskEditor(null);
+        }}
+      />
+    );
   return (
     <Modal
       title={
@@ -759,7 +790,22 @@ export default function Editor({
                 <Star size={15} /> 加入星标内容
               </label>
             </div>
-            {kind === "project" && item && !readOnly && <ProjectTasks project={item} />}
+            {kind === "project" && item && !readOnly && (
+              <>
+                {taskNotice && (
+                  <p role="status" className="field-hint">
+                    {taskNotice}
+                  </p>
+                )}
+                <ProjectTasks
+                  project={item}
+                  onOpen={setTaskEditor}
+                  disabled={saving || uploadsRunning || discard}
+                  visibleLimit={projectVisibleLimit}
+                  onVisibleLimit={setProjectVisibleLimit}
+                />
+              </>
+            )}
             {kind === "task" && (
               <Checklist
                 value={draft.meta.checklist}

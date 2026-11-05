@@ -13,6 +13,7 @@ export default function CalendarView({
   onMonth,
   selected,
   onSelect,
+  tag = "",
 }: {
   weekStartsMonday: boolean;
   onOpen: (r: SpaceRecord) => void;
@@ -21,6 +22,7 @@ export default function CalendarView({
   onMonth: (month: string) => void;
   selected: string;
   onSelect: (date: string) => void;
+  tag?: string;
 }) {
   const [items, setItems] = useState<SpaceRecord[]>([]),
     [busy, setBusy] = useState(true),
@@ -40,7 +42,15 @@ export default function CalendarView({
     setError("");
     setItems([]);
     allRecords(
-      new URLSearchParams({ kind: "event", from, to, scope: "active", lite: "1", sort: "due" }),
+      new URLSearchParams({
+        kind: "event",
+        from,
+        to,
+        scope: "active",
+        lite: "1",
+        sort: "due",
+        ...(tag ? { tag } : {}),
+      }),
     )
       .then((rows) => {
         if (active) setItems(rows);
@@ -54,7 +64,7 @@ export default function CalendarView({
     return () => {
       active = false;
     };
-  }, [from, to, retry]);
+  }, [from, to, retry, tag]);
   const selectedItems = items
       .filter((r) => r.dueAt === selected)
       .sort((a, b) => String(a.meta.time || "").localeCompare(String(b.meta.time || ""))),
@@ -83,7 +93,7 @@ export default function CalendarView({
             <button
               className="icon-button"
               aria-label="导出当前月日程"
-              disabled={busy}
+              disabled={busy || !!error}
               onClick={() =>
                 download(
                   ical(items.filter((r) => r.dueAt?.startsWith(month))),
@@ -119,7 +129,7 @@ export default function CalendarView({
         )}
         {busy && (
           <p className="calendar-loading" role="status">
-            正在读取这个月的全部日程…
+            正在读取当前筛选的日程…
           </p>
         )}
         {mode === "month" ? (

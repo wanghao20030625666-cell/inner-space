@@ -138,7 +138,7 @@ export const extraModules: Module[] = [
     id: "activity",
     name: "操作记录",
     icon: ActivityIcon,
-    description: "最近 40 次内容操作。",
+    description: "搜索和查看内容操作记录。",
     color: "green",
   },
   {

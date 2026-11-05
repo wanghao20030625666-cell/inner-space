@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useReducer, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type Dispatch } from "react";
 import {
   Settings2,
   ShieldCheck,
@@ -14,12 +14,19 @@ import {
 } from "lucide-react";
 import { type Preferences } from "../lib/model";
 import { api } from "../lib/client";
-import { normalizePreferences, preferencesReducer, samePreferences } from "../lib/preferences";
+import {
+  normalizePreferences,
+  samePreferences,
+  type PreferencesForm,
+  type PreferencesAction,
+} from "../lib/preferences";
 
 import DataTools from "./data-tools";
 import CaptureTools from "./capture-tools";
 import type { Kind } from "../lib/model";
 type Props = {
+  state: PreferencesForm;
+  dispatch: Dispatch<PreferencesAction>;
   preferences: Preferences;
   user: { name: string; email: string };
   notify: (text: string) => void;
@@ -29,6 +36,8 @@ type Props = {
   onActivity: () => void;
 };
 export default function SettingsPanel({
+  state,
+  dispatch,
   preferences,
   user,
   notify,
@@ -37,11 +46,6 @@ export default function SettingsPanel({
   onResume,
   onActivity,
 }: Props) {
-  const [state, dispatch] = useReducer(preferencesReducer, preferences, (p) => ({
-    base: normalizePreferences(p),
-    form: normalizePreferences(p),
-    remote: normalizePreferences(p),
-  }));
   const { form, base, remote } = state;
   const [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
@@ -52,11 +56,11 @@ export default function SettingsPanel({
       form.trashRetentionDays > 0 && form.trashRetentionDays !== base.trashRetentionDays;
   useEffect(() => {
     dispatch({ type: "receive", value: normalizePreferences(preferences) });
-  }, [preferences]);
+  }, [preferences, dispatch]);
   const refreshSettings = useCallback(async () => {
     const result = await api<{ preferences: Preferences }>("/api/preferences");
     dispatch({ type: "receive", value: normalizePreferences(result.preferences) });
-  }, []);
+  }, [dispatch]);
   useEffect(() => {
     const refresh = () => {
       void refreshSettings().catch(() => setError("最新设置读取失败，保存时会再次检查冲突。"));
@@ -88,6 +92,11 @@ export default function SettingsPanel({
   return (
     <div className="settings-layout">
       <form className="panel settings-card" onSubmit={save}>
+        {!samePreferences(form, base) && (
+          <p className="settings-session-hint" role="status">
+            有未保存的修改。切换板块会保留本次输入；保存后才会生效，刷新或关闭页面可能丢失。
+          </p>
+        )}
         <fieldset disabled={busy} className="settings-fields">
           <div className="settings-title">
             <Settings2 size={20} />
@@ -214,6 +223,19 @@ export default function SettingsPanel({
           >
             {busy ? <Loader2 size={15} className="spin" /> : <Check size={15} />}保存设置
           </button>
+          {!samePreferences(form, base) && (
+            <button
+              type="button"
+              className="button secondary settings-check"
+              disabled={busy}
+              onClick={() => {
+                dispatch({ type: "reload" });
+                setConfirmedRetention(false);
+              }}
+            >
+              放弃本次修改
+            </button>
+          )}
           <button
             type="button"
             className="button secondary settings-check"

@@ -656,6 +656,22 @@ fieldset.editor-fields {
   clip-path: inset(50%);
   white-space: nowrap;
 }
+.project-task-title {
+  text-align: left;
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.project-task-title:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.settings-session-hint {
+  margin-bottom: 16px;
+  color: var(--sub);
+  font-size: 12px;
+  line-height: 1.8;
+}
 .monthly-ledger {
   padding: 8px 22px 17px;
   max-height: 240px;

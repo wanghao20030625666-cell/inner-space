@@ -448,7 +448,8 @@
 .project-task-list {
   margin: 14px 0;
 }
-.project-task-list > label {
+.project-task-list > label,
+.project-task-row {
   display: flex;
   align-items: flex-start;
   gap: 10px;

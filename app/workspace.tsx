@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useRef, useState, lazy, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState, useReducer, lazy, Suspense } from "react";
+import { normalizePreferences, preferencesReducer, samePreferences } from "./lib/preferences";
 import {
   Search,
   Plus,
@@ -81,6 +82,25 @@ export default function Workspace({
     [toast, setToast] = useState(""),
     [busy, setBusy] = useState(false);
   const ui = useWorkspaceUi();
+  // Keep unsaved settings in the workspace session while individual modules unmount.
+  const [settingsState, settingsDispatch] = useReducer(
+    preferencesReducer,
+    initialPreferences,
+    (p) => {
+      const value = normalizePreferences(p);
+      return { base: value, form: value, remote: value };
+    },
+  );
+  const settingsDirty = !samePreferences(settingsState.form, settingsState.base);
+  useEffect(() => {
+    if (!settingsDirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    addEventListener("beforeunload", warn);
+    return () => removeEventListener("beforeunload", warn);
+  }, [settingsDirty]);
   const {
     state: { undo, selected },
     setEditor,
@@ -440,7 +460,7 @@ export default function Workspace({
                 ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                aria-label="搜索当前范围内容"
+                aria-label="搜索内容（普通视图跨模块，归档与回收站限当前范围）"
                 aria-describedby="search-scope"
                 title={
                   view === "trash"
@@ -633,6 +653,8 @@ export default function Workspace({
               />
             ) : view === "settings" && !activeSearch ? (
               <SettingsPanel
+                state={settingsState}
+                dispatch={settingsDispatch}
                 preferences={data.preferences}
                 user={user}
                 notify={setToast}
@@ -942,6 +964,7 @@ export default function Workspace({
                   />
                 ) : view === "event" && !activeSearch ? (
                   <CalendarView
+                    tag={tag}
                     month={calendarMonth}
                     onMonth={setCalendarMonth}
                     selected={calendarDate}
